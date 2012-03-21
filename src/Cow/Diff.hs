@@ -12,9 +12,8 @@ diff (Node l lchildren) (Node r rchildren)
   | otherwise = Node (Mod l r) $ comp lchildren rchildren
                 
 comp :: (Show a, Eq a, ExtEq a) => [AST a] -> [AST a] -> [Diff a]
-comp left right = walk left right $ getDiff (wrap <$> left) (wrap <$> right)
-  where wrap (Node h _) = ExtWrap h
-        walk (l:ls) (r:rs) ((B,_):ds) = diff l r : walk ls rs ds
+comp left right = walk left right $ getDiff left right
+  where walk (l:ls) (r:rs) ((B,_):ds) = diff l r : walk ls rs ds
         walk (l:ls) rs ((F,_):ds)     = del l : walk ls rs ds
         walk ls (r:rs) ((S,_):ds)     = ins r : walk ls rs ds
         walk [] [] []                 = []
