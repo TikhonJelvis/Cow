@@ -7,15 +7,12 @@ import Cow.Equality
 import Cow.Type
 
 diff :: (Show a, Eq a, ExtEq a) => AST a -> AST a -> Diff a
-diff (Node l []) (Node r []) 
-  | l ?= r    = Node (Non l r) []
-  | otherwise = Node (Mod l r) []
 diff (Node l lchildren) (Node r rchildren) 
   | l ?= r    = Node (Non l r) $ comp lchildren rchildren
   | otherwise = Node (Mod l r) $ comp lchildren rchildren
                 
 comp :: (Show a, Eq a, ExtEq a) => [AST a] -> [AST a] -> [Diff a]
-comp l r = walk l r $ getDiff (wrap <$> l) (wrap <$> r)
+comp left right = walk left right $ getDiff (wrap <$> left) (wrap <$> right)
   where wrap (Node h _) = ExtWrap h
         walk (l:ls) (r:rs) ((B,_):ds) = diff l r : walk ls rs ds
         walk (l:ls) rs ((F,_):ds)     = del l : walk ls rs ds
