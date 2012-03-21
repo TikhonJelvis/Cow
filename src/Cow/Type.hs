@@ -1,8 +1,15 @@
 module Cow.Type where
 
+import Data.Functor ((<$>))
+import Data.List    (intercalate)
+
 import Cow.Equality
 
-data AST a = Node a [AST a] deriving (Show, Eq)
+data AST a = Node a [AST a] deriving (Eq)
+
+instance Show a => Show (AST a) where 
+  show (Node value [])       = "[" ++ show value ++ "]"
+  show (Node value children) = "[" ++ show value ++ intercalate " " (show <$> children) ++ "]"
 
 data Change a = Ins a
               | Del a
