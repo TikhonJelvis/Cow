@@ -15,7 +15,13 @@ data Change a = Ins a
               | Del a
               | Mod a a
               | Non a a -- No change
-              deriving (Show, Eq)
+              deriving (Eq)
+                       
+instance Show a => Show (Change a) where 
+  show (Ins a) = "\\Ins{" ++ show a ++ "}"
+  show (Del a) = "\\Del{" ++ show a ++ "}"
+  show (Mod a b) = "\\Mod{" ++ show a ++ "}{" ++ show b ++ "}"
+  show (Non a b) = "\\Non{" ++ show a ++ "}{" ++ show b ++ "}"
                        
 type Diff a = AST (Change a)
 
