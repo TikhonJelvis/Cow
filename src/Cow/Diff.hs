@@ -1,7 +1,8 @@
 module Cow.Diff where
 
+import Control.Applicative        ((<$>), (<*>))
+
 import Data.Algorithm.Diff     (getDiff, DI(..))
-import Data.Functor            ((<$>))
 import Data.List               (genericLength, permutations, (\\))
 import Data.List.Extras.Argmax (argmax)
 
@@ -15,7 +16,7 @@ wrap (Node h _) = ExtWrap h
 (≈) :: Eq a => AST a -> AST a -> Double
 (Node l []) ≈ (Node r [])               = if l == r then 1 else 0
 (Node l lchildren) ≈ (Node r rchildren) = 0.25 * (if l == r then 1 else 0) + 0.75 * result
-  where average ls = sum ls / genericLength ls
+  where average = (/) <$> sum <*> genericLength
         val = (average .) . zipWith (≈) 
         result = maximum $ zipWith val (repeat lchildren) (permutations rchildren)
 
@@ -37,10 +38,13 @@ diff (Node l lchildren) (Node r rchildren)
                 
 comp :: (Show a, Eq a, ExtEq a) => [AST a] -> [AST a] -> [Diff a]
 comp left right = walk left right . uncurry getDiff $ toIdEq left right
-  where walk (l:ls) (r:rs) ((B,_):ds) = diff l r : walk ls rs ds
-        walk (l:ls) rs ((F,_):ds)     = del l : walk ls rs ds
-        walk ls (r:rs) ((S,_):ds)     = ins r : walk ls rs ds
-        walk [] [] []                 = []
-        walk _ _ _                    = error "Wrong size of inputs or diff."
+  where walk (l:ls) (r:rs) ((B,_):ds)       = diff l r : walk ls rs ds
+        walk (l:ls) (r:rs) ((S,_):(F,_):ds) = mod l r : walk ls rs ds
+        walk (l:ls) rs ((F,_):ds)           = del l : walk ls rs ds
+        walk ls (r:rs) ((S,_):ds)           = ins r : walk ls rs ds
+        walk [] [] []                       = []
+        walk _ _ _                          = error "Wrong size of inputs or diff."
+        mod l@(Node lr lc) r@(Node rr rc) = let Node _ children = diff l r in
+                                                Node (Mod lr rr) children
         del (Node r c) = Node (Del r) $ del <$> c
         ins (Node r c) = Node (Ins r) $ ins <$> c

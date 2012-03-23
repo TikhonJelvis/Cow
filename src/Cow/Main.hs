@@ -7,11 +7,12 @@ import Text.ParserCombinators.Parsec
 import Cow.Diff
 import Cow.Type
 
-toLaTeX :: Show a => a -> IO ()
-toLaTeX result = writeFile "out.ltx" out
+toLaTeX left right result = writeFile "out.ltx" out
   where out = unlines ["\\documentclass[12pt]{article}",
                        "\\usepackage{change}",
                        "\\begin{document}",
+                       "\\synttree" ++ left,
+                       "\\synttree" ++ right ++ "\\\\ \\\\ \\\\ \\\\",
                        "\\synttree" ++ show result,
                        "\\end{document}"]
         
@@ -23,5 +24,5 @@ nums = char '[' *> spaces *> (Node <$> value <*> children) <* char ']'
 
 draw :: String -> String -> IO ()
 draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
-  Right val -> toLaTeX val
+  Right val -> toLaTeX inp1 inp2 val
   Left  err -> putStrLn $ "Error: " ++ show err
