@@ -26,5 +26,8 @@ instance Show a => Show (Change a) where
 type Diff a = AST (Change a)
 
 data ExtWrap a = ExtWrap a deriving (Show)
-
 instance ExtEq a => Eq (ExtWrap a) where ExtWrap a == ExtWrap b = a ?= b
+
+data IdWrap a = IdWrap Integer a deriving (Show)
+instance Eq (IdWrap a) where (IdWrap n1 _) == (IdWrap n2 _) = n1 == n2
+

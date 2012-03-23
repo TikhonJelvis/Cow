@@ -9,7 +9,7 @@ import Cow.Type
 
 toLaTeX :: Show a => a -> IO ()
 toLaTeX result = writeFile "out.ltx" out
-  where out = unlines ["\\documentclass{article}",
+  where out = unlines ["\\documentclass[12pt]{article}",
                        "\\usepackage{change}",
                        "\\begin{document}",
                        "\\synttree" ++ show result,
