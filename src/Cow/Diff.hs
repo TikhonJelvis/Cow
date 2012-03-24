@@ -1,9 +1,11 @@
+{-# LANGUAGE ParallelListComp #-}
 module Cow.Diff where
 
 import Control.Applicative        ((<$>), (<*>))
 
 import Data.Algorithm.Diff     (getDiff, DI(..))
-import Data.List               (genericLength, permutations, (\\))
+import Data.Function           (on)
+import Data.List               (genericLength, permutations, sortBy, (\\))
 import Data.List.Extras.Argmax (argmax)
 
 import Cow.Equality
@@ -21,15 +23,15 @@ wrap (Node h _) = ExtWrap h
         result = maximum $ zipWith val (repeat lchildren) (permutations rchildren)
 
 toIdEq :: Eq a => [AST a] -> [AST a] -> ([IdWrap (AST a)], [IdWrap (AST a)])
-toIdEq = go 0
-  where go n [] rs    = ([], zipWith IdWrap [n..] rs)
+toIdEq left right = let (lf, rf) = go 0 left (zip [1..] right) in (lf, snd <$> sortBy (compare `on` fst) rf)
+  where go n [] rs    = ([], [(pos, IdWrap num r) | num <- [n..] | (pos, r) <- rs])
         go n ls []    = (zipWith IdWrap [n..] ls, [])
         go n (l:ls) rs 
-          | l ≈ best > 0.5 = let (lres, rres) = go (n + 1) ls (rs \\ [best]) in
-                                  (IdWrap n l : lres, IdWrap n best : rres)
+          | l ≈ best > 0.5 = let (lres, rres) = go (n + 1) ls (rs \\ [(pos, best)]) in
+                                  (IdWrap n l : lres, (pos, IdWrap n best) : rres)
           | otherwise       = let (lres, rres) = go (n + 1) ls rs in
                                   (IdWrap n l : lres, rres)
-          where best = argmax (l ≈) rs
+          where (pos, best) = argmax ((l ≈) . snd) rs
 
 diff :: (Show a, Eq a, ExtEq a) => AST a -> AST a -> Diff a
 diff (Node l lchildren) (Node r rchildren) 
