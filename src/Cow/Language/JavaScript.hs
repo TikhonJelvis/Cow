@@ -20,11 +20,11 @@ data Value = Var      (Maybe Tag) Name
            | Block deriving (Show, Eq)
 
 keywords :: [String]
-keywords = ["if", "else", "for", "while", "do", "in", "function", "void", "delete", "var",
-            "instanceof", "typeof", "return", "this"]
+keywords = ["if", "else", "for", "while", "do", "function", "void", "delete", "var",
+            "typeof", "return", "this"]
 
 keyword :: Parser Value
-keyword = Keyword <$> (choice $ string <$> keywords) <* spaces
+keyword = Keyword <$> (choice $ string <$> keywords)
 
 var :: Parser Value
 var = Var Nothing <$> name 
@@ -50,3 +50,11 @@ str = do opener   <- oneOf "\"'"
          
 regex :: Parser Value -- TODO: handle regexes with '/' characters inside (e.g. /\//).
 regex = Regex <$> (char '/' *> many1 (noneOf "/") <* char '/')
+
+operators :: [String] -- Turns out there are a lot of operators, some almost never used.
+operators = ["+", "++", "-", "--", "=", "==", "===", "!", "!=", "!==", "~", "&", "&&",
+             "|", "||", "^", "+=", "-=", "*", "*=", "/", "/=", "%", "%=", ",", ".",
+             "in", "instanceof"]
+
+operator :: Parser Value -- TODO: Work out precedences and stuff!
+operator = Operator <$> (choice $ string <$> operators)

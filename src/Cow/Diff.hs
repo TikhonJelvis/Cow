@@ -1,7 +1,7 @@
 {-# LANGUAGE ParallelListComp #-}
 module Cow.Diff where
 
-import Control.Applicative        ((<$>), (<*>))
+import Control.Applicative     ((<$>), (<*>))
 
 import Data.Algorithm.Diff     (getDiff, DI(..))
 import Data.Function           (on)
@@ -18,7 +18,7 @@ wrap (Node h _) = ExtWrap h
 (≈) :: Eq a => AST a -> AST a -> Double
 (Node l []) ≈ (Node r [])               = if l == r then 1 else 0
 (Node l lchildren) ≈ (Node r rchildren) = 0.25 * (if l == r then 1 else 0) + 0.75 * result
-  where average = (/) <$> sum <*> genericLength
+  where average ls = sum ls / genericLength ls
         val = (average .) . zipWith (≈) 
         result = maximum $ zipWith val (repeat lchildren) (permutations rchildren)
 
