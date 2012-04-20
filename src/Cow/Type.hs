@@ -7,6 +7,9 @@ import Cow.Equality
 
 data AST a = Node a [AST a] deriving (Eq)
 
+leaf :: a -> AST a
+leaf = (`Node` [])
+
 instance Show a => Show (AST a) where 
   show (Node value [])       = "[" ++ show value ++ "]"
   show (Node value children) = "[" ++ show value ++ intercalate " " (show <$> children) ++ "]"
