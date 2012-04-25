@@ -1,6 +1,8 @@
 module Cow.Language.JavaScript (Value) where
 
-import Control.Applicative ((<$>), (<*), (*>), (<*>), liftA2)
+import Prelude hiding (init)
+
+import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
 import Text.ParserCombinators.Parsec
 
@@ -9,7 +11,8 @@ import Cow.Type
 type Tag  = Int
 type Name = String
 
-data Value = Var      (Maybe Tag) Name
+data Value = Root
+           | Var      Name
            | Num      Double
            | Str      String
            | Regex    String
@@ -21,50 +24,73 @@ data Value = Var      (Maybe Tag) Name
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Block deriving (Show, Eq)
 
-keywords :: [String]
-keywords = ["if", "else", "for", "while", "do", "function", "void", "delete", "var",
-            "typeof", "return", "this"]
+terminator :: Parser Char
+terminator = oneOf "\n;"
 
-keyword :: Parser (AST Value)
-keyword = leaf . Keyword <$> (choice $ string <$> keywords)
+program :: Parser [AST Value]
+program = statement `sepBy` (terminator <* spaces)
 
-var :: Parser (AST Value)
-var = leaf . Var Nothing <$> name 
-  where name = liftA2 (:) (letter <|> char '_') $ many (letter <|> digit <|> char '_')
+funDef :: Parser (AST Value)
+funDef = do string "function"
+            name <- var
+            body <- block
+            return $ Node (Keyword "function") [name, body]
         
-num :: Parser (AST Value)
-num = leaf . Num . read <$> decimal
-  where decimal = (++) <$> many1 digit <*> fractional
-        fractional = ("." ++) <$> ((char '.' *> many1 digit) <|> return "0")
-
-specChar :: CharParser st Char -- TODO: Maybe add all the special characters? Or use read.
-specChar = spec <$> (oneOf "\"\\nt'" <?> "valid escape character (\", n, t, \\, or ')")
-  where spec character = case character of
-          'n'  -> '\n'
-          't'  -> '\t'
-          c    ->  c -- All other characters are just themselves when escaped.
-
-str :: Parser (AST Value)
-str = do opener   <- oneOf "\"'"
-         contents <- many $ (char '\\' *> specChar) <|> char opener
-         char opener <?> "end of string"
-         return . leaf $ Str contents
-         
-regex :: Parser (AST Value) -- TODO: handle regexes with '/' characters inside (e.g. /\//).
-regex = leaf . Regex <$> (char '/' *> many1 (noneOf "/") <* char '/')
-
-operators :: [String] -- Turns out there are a lot of operators, some almost never used.
-operators = ["+", "++", "-", "--", "=", "==", "===", "!", "!=", "!==", "~", "&", "&&",
-             "|", "||", "^", "+=", "-=", "*", "*=", "/", "/=", "%", "%=", ",", ".",
-             "in", "instanceof"]
-
-operator :: Parser (AST Value) -- TODO: Work out precedences and stuff!
-operator = leaf . Operator <$> (choice $ string <$> operators)
-
-block :: Parser [AST Value]
-block = between (char '{' *> spaces) (char '}') statements
-  where statements = statement `sepBy` 
-                     (optional (char ';') *> newline *> skipMany (oneOf " \t"))
-
+compoundBlock :: String -> Parser (AST Value)
+compoundBlock keyword = try $ Node <$> start <*> content
+  where start = Keyword <$> (string keyword <* spaces)
+        content = do initVal  <- init <* spaces
+                     blockVal <- block
+                     return $ [initVal, blockVal]
+                     
 wordBlock :: String -> Parser (AST Value)
-wordBlock = undefined
+wordBlock keyword = Node <$> try start <*> (return <$> block)
+  where start = Keyword <$> (string keyword <* spaces)
+                               
+init :: Parser (AST Value)
+init = Node Init <$> between (char '(' *> spaces) (char ')') (return <$> statement)
+
+block :: Parser (AST Value)
+block = statement <|> Node Block <$> between (char '{' *> spaces) (char '}') program
+        
+ifElse :: Parser (AST Value)
+ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
+            Node _ [elsePart]          <- wordBlock "else" 
+            return $ Node (Keyword "if") [initVal, blockVal, elsePart]
+            
+keyword :: String -> Parser (AST Value)
+keyword word = leaf . Keyword <$> string word <* spaces
+
+wordBlocks :: Parser (AST Value)
+wordBlocks = choice $ wordBlock <$> ["function", "if", "while", "for", "with"]
+
+returnStmt :: Parser (AST Value)
+returnStmt = Node <$> (Keyword <$> string "return")
+                  <*> (return <$> statement)
+
+statement :: Parser (AST Value)
+statement =  ifElse
+         <|> funDef
+         <|> wordBlocks
+         <|> keyword "break"
+         <|> keyword "continue"
+         <|> returnStmt 
+         <|> block
+         <|> varDecl
+         
+var :: Parser (AST Value)
+var = leaf . Var <$> liftA2 (:) (letter <|> digit) (many idChar)
+  where idChar = letter <|> digit <|> char '_'
+        
+varDecl :: Parser (AST Value)
+varDecl = do keyword "var" *> spaces
+             assignments <- assignment `sepBy1` (char ',' <* spaces)
+             return $ Node (Keyword "var") assignments
+             
+assignment :: Parser (AST Value)
+assignment = do name <- var <* spaces
+                string "=" *> spaces
+                val <- expression
+                return $ Node (Operator "=") [name, val]
+                
+expression = undefined
