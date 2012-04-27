@@ -4,8 +4,11 @@ import Prelude hiding (init)
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
+import Data.List (nub)
+
 import Text.ParserCombinators.Parsec
 import qualified Text.ParserCombinators.Parsec.Token as T
+import qualified Text.ParserCombinators.Parsec.Expr as E
 import Text.ParserCombinators.Parsec.Language (javaStyle)
 
 import Cow.Type
@@ -26,12 +29,19 @@ data Value = Root
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Block deriving (Show, Eq)
                             
+operators :: [[String]]
+operators = [["."], ["*", "/", "%"], ["+", "-"],
+             ["==", "===", "!=", "!==", "<", ">", "<=", ">="],
+             ["&", "&&", "|", "||", "^"],
+             [">>", ">>>", "<<"], ["=", "*=", "/=", "%="], ["+=", "-="],
+             [">>=", "<<=", "&=", "|=", "^="], [","]]
+            
+unaryOperators :: [String]
+unaryOperators = ["+", "++", "-", "--", "~", "!"]
+
 lexer :: T.TokenParser ()
 lexer = T.makeTokenParser $ javaStyle {
-  T.reservedOpNames = ["+", "++", "-", "--", "=", "==", "===", "!", "!=", "!==", "~",
-                         "&", "&&", "|", "||", "^", "+=", "-=", "*", "*=", "/", "/=", "%",
-                         ">>", ">>>", "<<", ">>=", "<<=", "&=", "|=", "^=", ",",
-                         "%=", ",", ".", "?", ":"],
+  T.reservedOpNames = nub $ concat operators ++ unaryOperators ++ ["?", ":"],
   T.reservedNames = ["break", "catch", "const", "continue", "delete", "do", "export",
                      "for", "function", "if", "import", "in", "instanceof", "label",
                      "let", "new", "return", "switch", "this", "throw", "try", "typeof",
@@ -98,5 +108,16 @@ varDecl = do keyword "var" *> spaces
 assignment :: Parser (AST Value)
 assignment = Node (Operator "=") <$> liftA2 (:)
                (var <* spaces <* string "=" <* spaces) (return <$> expression)
-                
+
+op :: String -> (AST Value) -> (AST Value) -> (AST Value)
+op opStr left right = Node (Operator opStr) [left, right]
+
+bin :: String -> E.Operator Char () (AST Value)
+bin opStr = E.Infix (op opStr <$ T.reservedOp lexer opStr) E.AssocLeft
+
+table :: E.OperatorTable Char () (AST Value)
+table = map (map bin) operators
+
 expression = undefined
+  
+
