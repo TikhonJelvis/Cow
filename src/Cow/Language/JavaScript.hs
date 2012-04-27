@@ -5,6 +5,8 @@ import Prelude hiding (init)
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
 import Text.ParserCombinators.Parsec
+import qualified Text.ParserCombinators.Parsec.Token as T
+import Text.ParserCombinators.Parsec.Language (javaStyle)
 
 import Cow.Type
 
@@ -23,43 +25,50 @@ data Value = Root
            | Loop 
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Block deriving (Show, Eq)
-
-terminator :: Parser Char
-terminator = oneOf "\n;"
+                            
+lexer :: T.TokenParser ()
+lexer = T.makeTokenParser $ javaStyle {
+  T.reservedOpNames = ["+", "++", "-", "--", "=", "==", "===", "!", "!=", "!==", "~",
+                         "&", "&&", "|", "||", "^", "+=", "-=", "*", "*=", "/", "/=", "%",
+                         ">>", ">>>", "<<", ">>=", "<<=", "&=", "|=", "^=", ",",
+                         "%=", ",", ".", "?", ":"],
+  T.reservedNames = ["break", "catch", "const", "continue", "delete", "do", "export",
+                     "for", "function", "if", "import", "in", "instanceof", "label",
+                     "let", "new", "return", "switch", "this", "throw", "try", "typeof",
+                     "var", "void", "while", "with", "yield"]
+  }
+            
+keyword :: String -> Parser Value
+keyword word = Keyword word <$ T.reserved lexer word
 
 program :: Parser [AST Value]
-program = statement `sepBy` (terminator <* spaces)
+program = T.semiSep lexer statement
 
 funDef :: Parser (AST Value)
-funDef = do string "function"
+funDef = do T.reserved lexer "function"
             name <- var
             body <- block
             return $ Node (Keyword "function") [name, body]
         
 compoundBlock :: String -> Parser (AST Value)
-compoundBlock keyword = try $ Node <$> start <*> content
-  where start = Keyword <$> (string keyword <* spaces)
-        content = do initVal  <- init <* spaces
-                     blockVal <- block
+compoundBlock word = try $ Node <$> keyword word <*> content
+  where content = do initVal  <- init <* spaces
+                     blockVal <- block <|> statement
                      return $ [initVal, blockVal]
                      
 wordBlock :: String -> Parser (AST Value)
-wordBlock keyword = Node <$> try start <*> (return <$> block)
-  where start = Keyword <$> (string keyword <* spaces)
+wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statement))
                                
 init :: Parser (AST Value)
-init = Node Init <$> between (char '(' *> spaces) (char ')') (return <$> statement)
+init = Node Init <$> T.parens lexer (return <$> statement)
 
 block :: Parser (AST Value)
-block = statement <|> Node Block <$> between (char '{' *> spaces) (char '}') program
+block = Node Block <$> T.braces lexer program
         
 ifElse :: Parser (AST Value)
 ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
             Node _ [elsePart]          <- wordBlock "else" 
             return $ Node (Keyword "if") [initVal, blockVal, elsePart]
-            
-keyword :: String -> Parser (AST Value)
-keyword word = leaf . Keyword <$> string word <* spaces
 
 wordBlocks :: Parser (AST Value)
 wordBlocks = choice $ wordBlock <$> ["function", "if", "while", "for", "with"]
@@ -72,25 +81,22 @@ statement :: Parser (AST Value)
 statement =  ifElse
          <|> funDef
          <|> wordBlocks
-         <|> keyword "break"
-         <|> keyword "continue"
+         <|> leaf <$> keyword "break"
+         <|> leaf <$> keyword "continue"
          <|> returnStmt 
          <|> block
          <|> varDecl
          
 var :: Parser (AST Value)
-var = leaf . Var <$> liftA2 (:) (letter <|> digit) (many idChar)
-  where idChar = letter <|> digit <|> char '_'
+var = leaf . Var <$> T.identifier lexer
         
 varDecl :: Parser (AST Value)
 varDecl = do keyword "var" *> spaces
-             assignments <- assignment `sepBy1` (char ',' <* spaces)
+             assignments <- T.commaSep1 lexer $ assignment <|> var
              return $ Node (Keyword "var") assignments
              
 assignment :: Parser (AST Value)
-assignment = do name <- var <* spaces
-                string "=" *> spaces
-                val <- expression
-                return $ Node (Operator "=") [name, val]
+assignment = Node (Operator "=") <$> liftA2 (:)
+               (var <* spaces <* string "=" <* spaces) (return <$> expression)
                 
 expression = undefined
