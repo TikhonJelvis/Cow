@@ -1,4 +1,4 @@
-module Cow.Language.JavaScript (Value) where
+module Cow.Language.JavaScript (Value(..), ) where
 
 import Prelude hiding (init)
 
@@ -6,7 +6,8 @@ import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
 import Data.List (nub)
 
-import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec hiding (parse)
+import qualified Text.ParserCombinators.Parsec as P (parse)
 import qualified Text.ParserCombinators.Parsec.Token as T
 import qualified Text.ParserCombinators.Parsec.Expr as E
 import Text.ParserCombinators.Parsec.Language (javaStyle)
@@ -28,13 +29,15 @@ data Value = Root
            | Loop 
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Block deriving (Show, Eq)
-                            
+
+parse = P.parse program
+
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
              ["==", "===", "!=", "!==", "<", ">", "<=", ">="],
              ["&", "&&", "|", "||", "^"],
              [">>", ">>>", "<<"], ["=", "*=", "/=", "%="], ["+=", "-="],
-             [">>=", "<<=", "&=", "|=", "^="], [","]]
+             [">>=", "<<=", "&=", "|=", "^="]]
             
 unaryOperators :: [String]
 unaryOperators = ["+", "++", "-", "--", "~", "!"]
@@ -96,13 +99,14 @@ statement =  ifElse
          <|> returnStmt 
          <|> block
          <|> varDecl
+         <|> expression
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer
         
 varDecl :: Parser (AST Value)
 varDecl = do keyword "var" *> spaces
-             assignments <- T.commaSep1 lexer $ assignment <|> var
+             assignments <- T.commaSep1 lexer $ try assignment <|> var
              return $ Node (Keyword "var") assignments
              
 assignment :: Parser (AST Value)
