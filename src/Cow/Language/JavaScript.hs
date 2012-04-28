@@ -118,6 +118,12 @@ bin opStr = E.Infix (op opStr <$ T.reservedOp lexer opStr) E.AssocLeft
 table :: E.OperatorTable Char () (AST Value)
 table = map (map bin) operators
 
-expression = undefined
-  
-
+expression :: Parser (AST Value)
+expression = E.buildExpressionParser table term
+  where term = T.parens lexer expression <|> atom
+        
+atom =  leaf . Str <$> T.stringLiteral lexer
+    <|> leaf . Num <$> try (T.float lexer)
+    <|> leaf . Num . fromIntegral <$> try (T.hexadecimal lexer)
+    <|> leaf . Num . fromIntegral <$> T.integer lexer
+    <|> var
