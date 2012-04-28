@@ -52,16 +52,16 @@ lexer = T.makeTokenParser $ javaStyle {
   }
             
 keyword :: String -> Parser Value
-keyword word = Keyword word <$ T.reserved lexer word
+keyword word = Keyword word <$ T.reserved lexer word <?> "keyword " ++ word
 
 program :: Parser [AST Value]
 program = T.semiSep lexer statement
 
 funDef :: Parser (AST Value)
-funDef = do T.reserved lexer "function"
-            name <- var
-            body <- block
-            return $ Node (Keyword "function") [name, body]
+funDef = (do T.reserved lexer "function"
+             name <- var
+             body <- block
+             return $ Node (Keyword "function") [name, body]) <?> "Function declaration."
         
 compoundBlock :: String -> Parser (AST Value)
 compoundBlock word = try $ Node <$> keyword word <*> content
@@ -76,22 +76,22 @@ init :: Parser (AST Value)
 init = Node Init <$> T.parens lexer (return <$> statement)
 
 block :: Parser (AST Value)
-block = Node Block <$> T.braces lexer program
+block = Node Block <$> T.braces lexer program <?> "block"
         
 ifElse :: Parser (AST Value)
 ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
-            Node _ [elsePart]          <- wordBlock "else" 
+            Node _ [elsePart]          <- wordBlock "else" <?> "else clause"
             return $ Node (Keyword "if") [initVal, blockVal, elsePart]
 
 wordBlocks :: Parser (AST Value)
 wordBlocks = choice $ wordBlock <$> ["function", "if", "while", "for", "with"]
 
 returnStmt :: Parser (AST Value)
-returnStmt = Node <$> (Keyword <$> string "return")
-                  <*> (return <$> statement)
+returnStmt = (Node <$> (Keyword <$> string "return")
+                   <*> (return <$> statement)) <?> "return statement"
 
 statement :: Parser (AST Value)
-statement =  ifElse
+statement = (ifElse
          <|> funDef
          <|> wordBlocks
          <|> leaf <$> keyword "break"
@@ -99,19 +99,19 @@ statement =  ifElse
          <|> returnStmt 
          <|> block
          <|> varDecl
-         <|> expression
+         <|> expression) <?> "statement"
          
 var :: Parser (AST Value)
-var = leaf . Var <$> T.identifier lexer
+var = leaf . Var <$> T.identifier lexer <?> "identifier"
         
 varDecl :: Parser (AST Value)
 varDecl = do keyword "var" *> spaces
              assignments <- T.commaSep1 lexer $ try assignment <|> var
-             return $ Node (Keyword "var") assignments
+             (return $ Node (Keyword "var") assignments) <?> "variable declaration"
              
 assignment :: Parser (AST Value)
 assignment = Node (Operator "=") <$> liftA2 (:)
-               (var <* spaces <* string "=" <* spaces) (return <$> expression)
+               (var <* spaces <* string "=" <* spaces) (return <$> expression) <?> "assignment"
 
 op :: String -> (AST Value) -> (AST Value) -> (AST Value)
 op opStr left right = Node (Operator opStr) [left, right]
@@ -123,11 +123,11 @@ table :: E.OperatorTable Char () (AST Value)
 table = map (map bin) operators
 
 expression :: Parser (AST Value)
-expression = E.buildExpressionParser table term
+expression = E.buildExpressionParser table term <?> "expression"
   where term = T.parens lexer expression <|> atom
         
-atom =  leaf . Str <$> T.stringLiteral lexer
-    <|> leaf . Num <$> try (T.float lexer)
-    <|> leaf . Num . fromIntegral <$> try (T.hexadecimal lexer)
-    <|> leaf . Num . fromIntegral <$> T.integer lexer
+atom =  (leaf . Str <$> T.stringLiteral lexer <?> "string literal")
+    <|> (leaf . Num <$> try (T.float lexer) <?> "floating point literal")
+    <|> (leaf . Num . fromIntegral <$> try (T.hexadecimal lexer) <?> "hex literal")
+    <|> (leaf . Num . fromIntegral <$> T.integer lexer <?> "integer literal")
     <|> var
