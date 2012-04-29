@@ -1,10 +1,11 @@
-module Cow.Language.JavaScript (Value(..), ) where
+module Cow.Language.JavaScript (Value(..), parse) where
 
 import Prelude hiding (init)
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
-import Data.List (nub)
+import Data.List  (nub)
+import Data.Maybe (maybeToList)
 
 import Text.ParserCombinators.Parsec hiding (parse)
 import qualified Text.ParserCombinators.Parsec as P (parse)
@@ -18,12 +19,14 @@ type Tag  = Int
 type Name = String
 
 data Value = Root
+           | Empty
            | Var      Name
            | Num      Double
            | Str      String
            | Regex    String
            | Keyword  String
            | Operator String
+           | Function
            | Array
            | Object
            | Loop 
@@ -52,16 +55,18 @@ lexer = T.makeTokenParser $ javaStyle {
   }
             
 keyword :: String -> Parser Value
-keyword word = Keyword word <$ T.reserved lexer word <?> "keyword " ++ word
+keyword word = Keyword word <$ T.reserved lexer word <?> word
 
 program :: Parser [AST Value]
-program = T.semiSep lexer statement
+program = T.whiteSpace lexer *> T.semiSep lexer statement
 
 funDef :: Parser (AST Value)
 funDef = (do T.reserved lexer "function"
              name <- var
+             args <- argList
              body <- block
-             return $ Node (Keyword "function") [name, body]) <?> "Function declaration."
+             return $ Node Function [name, body]) <?> "Function declaration."
+  where argList = T.parens lexer . T.commaSep lexer $ T.identifier lexer
         
 compoundBlock :: String -> Parser (AST Value)
 compoundBlock word = try $ Node <$> keyword word <*> content
@@ -70,7 +75,9 @@ compoundBlock word = try $ Node <$> keyword word <*> content
                      return $ [initVal, blockVal]
                      
 wordBlock :: String -> Parser (AST Value)
-wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statement))
+wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statementBlock))
+  where statementBlock = do content <- statement
+                            return $ Node Block [content]
                                
 init :: Parser (AST Value)
 init = Node Init <$> T.parens lexer (return <$> statement)
@@ -83,23 +90,24 @@ ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
             Node _ [elsePart]          <- wordBlock "else" <?> "else clause"
             return $ Node (Keyword "if") [initVal, blockVal, elsePart]
 
-wordBlocks :: Parser (AST Value)
-wordBlocks = choice $ wordBlock <$> ["function", "if", "while", "for", "with"]
+compoundBlocks :: Parser (AST Value)
+compoundBlocks = choice $ try . compoundBlock <$> ["if", "while", "for", "with"]
 
 returnStmt :: Parser (AST Value)
-returnStmt = (Node <$> (Keyword <$> string "return")
-                   <*> (return <$> statement)) <?> "return statement"
+returnStmt = (Node <$> (Keyword "return" <$ T.reserved lexer "return")
+                   <*> (maybeToList <$> optionMaybe statement)) <?> "return statement"
 
 statement :: Parser (AST Value)
-statement = (ifElse
-         <|> funDef
-         <|> wordBlocks
+statement = (try ifElse
+         <|> try funDef
+         <|> compoundBlocks
          <|> leaf <$> keyword "break"
          <|> leaf <$> keyword "continue"
          <|> returnStmt 
          <|> block
          <|> varDecl
-         <|> expression) <?> "statement"
+         <|> expression
+         <|> leaf Empty <$ string "") <?> "statement"
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"
