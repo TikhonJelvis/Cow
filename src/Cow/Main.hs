@@ -19,7 +19,17 @@ toLaTeX left right result = writeFile "out.ltx" out
                        "\\synttree" ++ right ++ "\\\\ \\\\ \\\\ \\\\",
                        "\\synttree" ++ show result,
                        "\\end{document}"]
-        
+
+toTreeLaTeX :: (Show error) => Either error [AST JS.Value] -> IO ()
+toTreeLaTeX inp = case inp of
+  Right tree -> writeFile "out.ltx" (out tree)
+  Left  err  -> print err
+  where out tree = unlines ["\\documentclass[12pt]{article}",
+                            "\\usepackage[margin=1in, paperwidth=12in, textwidth=10in, paperheight=8.5in]{geometry}",
+                            "\\usepackage{change}",
+                            "\\begin{document}",
+                            "\\synttree" ++ show (Node JS.Root tree),
+                            "\\end{document}"]
 
 nums :: Parser (AST Integer)
 nums = char '[' *> spaces *> (Node <$> value <*> children) <* char ']'
@@ -32,6 +42,6 @@ draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp
   Left  err -> putStrLn $ "Error: " ++ show err
   
 testParse :: IO ()
-testParse = parseFile JS.parser "test.js" >>= printRes
-  where  printRes (Right res) = print $ Node JS.Root res
-         printRes (Left err)  = print err
+testParse = parseFile JS.parser "test.js" >>= toTreeLaTeX
+  -- where  printRes (Right res) = print $ Node JS.Root res
+  --        printRes (Left err)  = print err
