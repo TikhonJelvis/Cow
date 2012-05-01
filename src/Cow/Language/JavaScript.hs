@@ -1,39 +1,43 @@
-module Cow.Language.JavaScript (Value(..), parse) where
-
-import Prelude hiding (init)
+module Cow.Language.JavaScript (Value(..), parser) where
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
 import Data.List  (nub)
 import Data.Maybe (maybeToList)
 
-import Text.ParserCombinators.Parsec hiding (parse)
-import qualified Text.ParserCombinators.Parsec as P (parse)
+import Text.ParserCombinators.Parsec 
 import qualified Text.ParserCombinators.Parsec.Token as T
 import qualified Text.ParserCombinators.Parsec.Expr as E
 import Text.ParserCombinators.Parsec.Language (javaStyle)
 
 import Cow.Type
 
-type Tag  = Int
-type Name = String
-
 data Value = Root
            | Empty
-           | Var      Name
+           | Var      String
            | Num      Double
            | Str      String
            | Regex    String
            | Keyword  String
            | Operator String
            | Function
+           | Call
            | Array
            | Object
            | Loop 
            | Init -- The bit between parentheses in loops, if statements and so on...
+           | Args
            | Block deriving (Show, Eq)
 
-parse = P.parse program
+parser :: SourceName -> String -> Either ParseError [AST Value]
+parser = parse program
+
+
+ε :: Parser String
+ε = string ""
+
+terminator :: Parser Char
+terminator = oneOf ";\n"
 
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
@@ -58,19 +62,19 @@ keyword :: String -> Parser Value
 keyword word = Keyword word <$ T.reserved lexer word <?> word
 
 program :: Parser [AST Value]
-program = T.whiteSpace lexer *> T.semiSep lexer statement
+program = T.whiteSpace lexer *> many (statement <* terminator <* spaces)
 
 funDef :: Parser (AST Value)
 funDef = (do T.reserved lexer "function"
              name <- var
-             args <- argList
+             args <- Node Init . map (leaf . Var) <$> argList
              body <- block
-             return $ Node Function [name, body]) <?> "Function declaration."
+             return $ Node Function [name, args, body]) <?> "Function declaration."
   where argList = T.parens lexer . T.commaSep lexer $ T.identifier lexer
         
 compoundBlock :: String -> Parser (AST Value)
 compoundBlock word = try $ Node <$> keyword word <*> content
-  where content = do initVal  <- init <* spaces
+  where content = do initVal  <- Node Init <$> T.parens lexer (return <$> expression)
                      blockVal <- block <|> statement
                      return $ [initVal, blockVal]
                      
@@ -78,10 +82,6 @@ wordBlock :: String -> Parser (AST Value)
 wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statementBlock))
   where statementBlock = do content <- statement
                             return $ Node Block [content]
-                               
-init :: Parser (AST Value)
-init = Node Init <$> T.parens lexer (return <$> statement)
-
 block :: Parser (AST Value)
 block = Node Block <$> T.braces lexer program <?> "block"
         
@@ -107,7 +107,7 @@ statement = (try ifElse
          <|> block
          <|> varDecl
          <|> expression
-         <|> leaf Empty <$ string "") <?> "statement"
+         <|> leaf Empty <$ ε) <?> "statement"
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"
@@ -133,9 +133,24 @@ table = map (map bin) operators
 expression :: Parser (AST Value)
 expression = E.buildExpressionParser table term <?> "expression"
   where term = T.parens lexer expression <|> atom
-        
-atom =  (leaf . Str <$> T.stringLiteral lexer <?> "string literal")
-    <|> (leaf . Num <$> try (T.float lexer) <?> "floating point literal")
-    <|> (leaf . Num . fromIntegral <$> try (T.hexadecimal lexer) <?> "hex literal")
-    <|> (leaf . Num . fromIntegral <$> T.integer lexer <?> "integer literal")
-    <|> var
+                  
+arguments :: Parser [AST Value]
+arguments =  [] <$ try (T.parens lexer ε)
+         <|> T.parens lexer (T.commaSep lexer expression)
+
+indexOrCall :: Parser (AST Value)
+indexOrCall = do base  <- simpleAtom
+                 calls <- many $ arguments <|> return <$> T.squares lexer expression
+                 return $ foldl (\ fn args -> Node Call [fn, Node Args args]) base calls
+
+simpleAtom :: Parser (AST Value)
+simpleAtom =  (leaf . Str <$> T.stringLiteral lexer <?> "string literal")
+          <|> (leaf . Num <$> try (T.float lexer) <?> "floating point literal")
+          <|> (leaf . Num . fromIntegral <$> try (T.hexadecimal lexer) <?> "hex literal")
+          <|> (leaf . Num . fromIntegral <$> T.integer lexer <?> "integer literal")
+          <|> (T.parens lexer expression <?> "parenthesized expression")
+          <|> var
+              
+atom :: Parser (AST Value)
+atom =  try indexOrCall
+    <|> simpleAtom
