@@ -10,6 +10,7 @@ import Cow.Type
 
 import qualified Cow.Language.JavaScript as JS
 
+toLaTeX :: Show a => String -> String -> a -> IO ()
 toLaTeX left right result = writeFile "out.ltx" out
   where out = unlines ["\\documentclass[12pt]{article}",
                        "\\usepackage{change}",
@@ -31,6 +32,6 @@ draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp
   Left  err -> putStrLn $ "Error: " ++ show err
   
 testParse :: IO ()
-testParse = parseFile JS.parse "test.js" >>= printRes
-  where  printRes (Right res) = print res
+testParse = parseFile JS.parser "test.js" >>= printRes
+  where  printRes (Right res) = print $ Node JS.Root res
          printRes (Left err)  = print err

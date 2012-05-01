@@ -1,10 +1,9 @@
 {-# LANGUAGE ParallelListComp #-}
 module Cow.Diff where
 
-import Control.Applicative     ((<$>), (<*>))
-
 import Data.Algorithm.Diff     (getDiff, DI(..))
 import Data.Function           (on)
+import Data.Functor            ((<$>))
 import Data.List               (genericLength, permutations, sortBy, (\\))
 import Data.List.Extras.Argmax (argmax)
 
@@ -46,7 +45,7 @@ comp left right = walk left right . uncurry getDiff $ toIdEq left right
         walk ls (r:rs) ((S,_):ds)           = ins r : walk ls rs ds
         walk [] [] []                       = []
         walk _ _ _                          = error "Wrong size of inputs or diff."
-        mod l@(Node lr lc) r@(Node rr rc) = let Node _ children = diff l r in
+        mod l@(Node lr _) r@(Node rr _) = let Node _ children = diff l r in
                                                 Node (Mod lr rr) children
         del (Node r c) = Node (Del r) $ del <$> c
         ins (Node r c) = Node (Ins r) $ ins <$> c
