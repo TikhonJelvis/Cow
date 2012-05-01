@@ -24,8 +24,8 @@ toTreeLaTeX :: (Show error) => Either error [AST JS.Value] -> IO ()
 toTreeLaTeX inp = case inp of
   Right tree -> writeFile "out.ltx" (out tree)
   Left  err  -> print err
-  where out tree = unlines ["\\documentclass[12pt]{article}",
-                            "\\usepackage[margin=1in, paperwidth=20in, textwidth=20in, paperheight=8.5in]{geometry}",
+  where out tree = unlines ["\\documentclass[10pt]{article}",
+                            "\\usepackage[margin=1in, paperwidth=30in, textwidth=30in, paperheight=8.5in]{geometry}",
                             "\\usepackage{change}",
                             "\\begin{document}",
                             "\\synttree" ++ show (Node JS.Root tree),

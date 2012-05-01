@@ -130,6 +130,9 @@ statement = (try ifElse
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"
+
+str :: Parser (AST Value)
+str = leaf . Str <$> T.stringLiteral lexer <?> "string literal"
         
 varDecl :: Parser (AST Value)
 varDecl = do keyword "var" *> spaces
@@ -165,13 +168,20 @@ indexOrCall = do base  <- simpleAtom
                  calls <- many $ arguments <|> return <$> T.squares lexer expression
                  return $ foldl (\ fn args -> Node Call [fn, Node Args args]) base calls
 
+objLit :: Parser (AST Value)
+objLit = Node Object <$> bindings
+  where bindings = T.braces lexer . T.commaSep lexer $
+                   pair <$> (str <|> var) <*> (T.colon lexer *> expression)
+        pair name value = Node (Operator ":") [name, value]
+
 simpleAtom :: Parser (AST Value)
-simpleAtom =  (leaf . Str <$> T.stringLiteral lexer <?> "string literal")
+simpleAtom =  str
           <|> (leaf . Num <$> try (T.float lexer) <?> "floating point literal")
           <|> (leaf . Num . fromIntegral <$> try (T.hexadecimal lexer) <?> "hex literal")
           <|> (leaf . Num . fromIntegral <$> T.integer lexer <?> "integer literal")
           <|> (T.parens lexer expression <?> "parenthesized expression")
           <|> try funLit
+          <|> try objLit
           <|> var
               
 atom :: Parser (AST Value)
