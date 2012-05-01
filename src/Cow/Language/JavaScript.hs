@@ -56,21 +56,20 @@ terminator = optional (oneOf ";\n") <|> eof
 
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
-             ["==", "===", "!=", "!==", "<", ">", "<=", ">="],
-             ["&", "&&", "|", "||", "^"],
-             [">>", ">>>", "<<"], ["=", "*=", "/=", "%="], ["+=", "-="],
-             [">>=", "<<=", "&=", "|=", "^="]]
+             [">>", ">>>", "<<"], ["<", "<=", ">", ">=", "in", "instanceof"],
+             ["==", "===", "!=", "!=="], ["&"], ["^"], ["|"], ["&&"], ["||"],
+             ["=", "*=", "/=", "%=", "+=", "-=", ">>=", "<<=", "&=", "|=", "^="]]
             
-unaryOperators :: [String]
-unaryOperators = ["+", "++", "-", "--", "~", "!"]
+unaryOperators :: [[String]]
+unaryOperators = [["new"], ["++", "--"], ["+", "-", "~", "!", "typeof", "void", "delete"]]
 
 lexer :: T.TokenParser ()
 lexer = T.makeTokenParser $ javaStyle {
-  T.reservedOpNames = nub $ concat operators ++ unaryOperators ++ ["?", ":"],
-  T.reservedNames = ["break", "catch", "const", "continue", "delete", "do", "export",
-                     "for", "function", "if", "import", "in", "instanceof", "label",
-                     "let", "new", "return", "switch", "this", "throw", "try", "typeof",
-                     "var", "void", "while", "with", "yield"]
+  T.reservedOpNames = nub $ concat operators ++ concat unaryOperators ++ ["?", ":"],
+  T.reservedNames = ["break", "catch", "const", "continue", "do", "export",
+                     "for", "function", "if", "import", "label",
+                     "let", "return", "switch", "this", "throw", "try", 
+                     "var", "while", "with", "yield"]
   }
             
 keyword :: String -> Parser Value
@@ -143,18 +142,20 @@ assignment :: Parser (AST Value)
 assignment = Node (Operator "=") <$> liftA2 (:)
                (var <* spaces <* string "=" <* spaces) (return <$> expression) <?> "assignment"
 
-op :: String -> (AST Value) -> (AST Value) -> (AST Value)
-op opStr left right = Node (Operator opStr) [left, right]
-
 funLit :: Parser (AST Value)
 funLit = T.reserved lexer "function" *> (func <$> parameterList <*> block)
   where func args body = Node Function [args, body]
 
-bin :: String -> E.Operator Char () (AST Value)
-bin opStr = E.Infix (op opStr <$ T.reservedOp lexer opStr) E.AssocLeft
-
 table :: E.OperatorTable Char () (AST Value)
-table = map (map bin) operators
+table = [post "++", post "--"]  :
+        (map (map pref) unaryOperators ++
+         map (map bin) operators)
+  where op opStr left right = Node (Operator opStr) [left, right]
+        unOp opStr arg = Node (Operator opStr) [arg]
+        postOp opStr arg = Node (Operator $ "post" ++ opStr) [arg]
+        bin opStr  = E.Infix (op opStr <$ T.reservedOp lexer opStr) E.AssocLeft
+        pref opStr = E.Prefix (unOp opStr <$ T.reservedOp lexer opStr)
+        post opStr = E.Postfix (postOp opStr <$ T.reservedOp lexer opStr)
 
 expression :: Parser (AST Value)
 expression = E.buildExpressionParser table atom <?> "expression"
