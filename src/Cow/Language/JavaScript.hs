@@ -48,12 +48,11 @@ instance Show Value where
 parser :: SourceName -> String -> Either ParseError [AST Value]
 parser = parse program
 
-
 ε :: Parser String
 ε = string ""
 
 terminator :: Parser ()
-terminator = () <$ oneOf ";\n" <|> eof
+terminator = optional (oneOf ";\n") <|> eof
 
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
@@ -78,7 +77,7 @@ keyword :: String -> Parser Value
 keyword word = Keyword word <$ T.reserved lexer word <?> word
 
 program :: Parser [AST Value]
-program = T.whiteSpace lexer *> many (statement <* terminator <* spaces)
+program = T.whiteSpace lexer *> many (statement <* spaces)
 
 funDef :: Parser (AST Value)
 funDef = (do T.reserved lexer "function"
@@ -113,16 +112,19 @@ returnStmt :: Parser (AST Value)
 returnStmt = (Node <$> (Keyword "return" <$ T.reserved lexer "return")
                    <*> (maybeToList <$> optionMaybe statement)) <?> "return statement"
 
+terminatedStatement :: Parser (AST Value)
+terminatedStatement = (compoundBlocks
+                   <|> leaf <$> keyword "break"
+                   <|> leaf <$> keyword "continue"
+                   <|> returnStmt
+                   <|> varDecl
+                   <|> expression) <* terminator <* spaces
+
 statement :: Parser (AST Value)
 statement = (try ifElse
          <|> try funDef
-         <|> compoundBlocks
-         <|> leaf <$> keyword "break"
-         <|> leaf <$> keyword "continue"
-         <|> returnStmt 
-         <|> block
-         <|> varDecl
-         <|> expression) <?> "statement"
+         <|> terminatedStatement
+         <|> block) <?> "statement"
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"

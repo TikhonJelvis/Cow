@@ -25,7 +25,7 @@ toTreeLaTeX inp = case inp of
   Right tree -> writeFile "out.ltx" (out tree)
   Left  err  -> print err
   where out tree = unlines ["\\documentclass[12pt]{article}",
-                            "\\usepackage[margin=1in, paperwidth=12in, textwidth=10in, paperheight=8.5in]{geometry}",
+                            "\\usepackage[margin=1in, paperwidth=20in, textwidth=20in, paperheight=8.5in]{geometry}",
                             "\\usepackage{change}",
                             "\\begin{document}",
                             "\\synttree" ++ show (Node JS.Root tree),
@@ -43,5 +43,5 @@ draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp
   
 testParse :: IO ()
 testParse = parseFile JS.parser "test.js" >>= toTreeLaTeX
-  -- where  printRes (Right res) = print $ Node JS.Root res
-  --        printRes (Left err)  = print err
+  where  printRes (Right res) = print $ Node JS.Root res
+         printRes (Left err)  = print err
