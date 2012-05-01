@@ -24,10 +24,26 @@ data Value = Root
            | Call
            | Array
            | Object
-           | Loop 
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Args
-           | Block deriving (Show, Eq)
+           | Block deriving (Eq)
+                            
+instance Show Value where
+  show Root  = "\\uppercase{root}"
+  show Empty = "$\\epsilon$"
+  show (Var n) = n
+  show (Num n) = "$" ++ take (length (show n) - 2) (show n) ++"$"
+  show (Str s) = show s
+  show (Regex r) = "/" ++ r ++ "/"
+  show (Keyword k) = "\\textsc{" ++ k ++ "}"
+  show (Operator o) = if o == "." then "dot" else"$" ++ o ++ "$"
+  show Function = "\\uppercase{function}"
+  show Call = "\\uppercase{call}"
+  show Array = "\\uppercase{array}"
+  show Object = "\\uppercase{object}"
+  show Init = "\\uppercase{init}"
+  show Args = "\\uppercase{args}"
+  show Block = "\\uppercase{block}"
 
 parser :: SourceName -> String -> Either ParseError [AST Value]
 parser = parse program
@@ -36,8 +52,8 @@ parser = parse program
 ε :: Parser String
 ε = string ""
 
-terminator :: Parser Char
-terminator = oneOf ";\n"
+terminator :: Parser ()
+terminator = () <$ oneOf ";\n" <|> eof
 
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
@@ -106,8 +122,7 @@ statement = (try ifElse
          <|> returnStmt 
          <|> block
          <|> varDecl
-         <|> expression
-         <|> leaf Empty <$ ε) <?> "statement"
+         <|> expression) <?> "statement"
          
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"
