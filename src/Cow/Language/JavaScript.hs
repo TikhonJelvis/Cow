@@ -80,19 +80,21 @@ program :: Parser [AST Value]
 program = T.whiteSpace lexer *> many (statement <* spaces)
 
 funDef :: Parser (AST Value)
-funDef = (do T.reserved lexer "function"
-             name <- var
-             args <- Node Init . map (leaf . Var) <$> argList
-             body <- block
-             return $ Node Function [name, args, body]) <?> "Function declaration."
+funDef = T.reserved lexer "function" *>
+         (func <$> var <*> parameterList <*> block) <?> "function declaration"
+  where func name args body = Node Function [name, args, body]
+
+parameterList :: Parser (AST Value)
+parameterList = Node Init . map (leaf . Var) <$> argList
   where argList = T.parens lexer . T.commaSep lexer $ T.identifier lexer
         
 compoundBlock :: String -> Parser (AST Value)
-compoundBlock word = try $ Node <$> keyword word <*> content
-  where content = do initVal  <- Node Init <$> T.parens lexer (return <$> expression)
-                     blockVal <- block <|> statement
-                     return $ [initVal, blockVal]
-                     
+compoundBlock word = try $ compound <$> keyword word
+                                    <*> initExp
+                                    <*> (block <|> statement)
+  where compound key initVal body = Node key [initVal, body]
+        initExp = Node Init <$> T.parens lexer (return <$> expression)
+
 wordBlock :: String -> Parser (AST Value)
 wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statementBlock))
   where statementBlock = do content <- statement
@@ -141,6 +143,10 @@ assignment = Node (Operator "=") <$> liftA2 (:)
 op :: String -> (AST Value) -> (AST Value) -> (AST Value)
 op opStr left right = Node (Operator opStr) [left, right]
 
+funLit :: Parser (AST Value)
+funLit = T.reserved lexer "function" *> (func <$> parameterList <*> block)
+  where func args body = Node Function [args, body]
+
 bin :: String -> E.Operator Char () (AST Value)
 bin opStr = E.Infix (op opStr <$ T.reservedOp lexer opStr) E.AssocLeft
 
@@ -148,8 +154,7 @@ table :: E.OperatorTable Char () (AST Value)
 table = map (map bin) operators
 
 expression :: Parser (AST Value)
-expression = E.buildExpressionParser table term <?> "expression"
-  where term = T.parens lexer expression <|> atom
+expression = E.buildExpressionParser table atom <?> "expression"
                   
 arguments :: Parser [AST Value]
 arguments =  [] <$ try (T.parens lexer ε)
@@ -166,6 +171,7 @@ simpleAtom =  (leaf . Str <$> T.stringLiteral lexer <?> "string literal")
           <|> (leaf . Num . fromIntegral <$> try (T.hexadecimal lexer) <?> "hex literal")
           <|> (leaf . Num . fromIntegral <$> T.integer lexer <?> "integer literal")
           <|> (T.parens lexer expression <?> "parenthesized expression")
+          <|> try funLit
           <|> var
               
 atom :: Parser (AST Value)
