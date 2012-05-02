@@ -5,7 +5,6 @@ import Control.Applicative ((*>), (<*), (<$>), (<*>))
 import Text.ParserCombinators.Parsec
 
 import Cow.Diff
-import Cow.Parse
 import Cow.Type
 
 import qualified Cow.Language.JavaScript as JS
@@ -42,6 +41,6 @@ draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp
   Left  err -> putStrLn $ "Error: " ++ show err
   
 testParse :: IO ()
-testParse = parseFile JS.parser "test.js" >>= toTreeLaTeX
+testParse = parseFromFile JS.program "test.js" >>= toTreeLaTeX
   where  printRes (Right res) = print $ Node JS.Root res
          printRes (Left err)  = print err

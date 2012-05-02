@@ -1,4 +1,4 @@
-module Cow.Language.JavaScript (Value(..), parser) where
+module Cow.Language.JavaScript (Value(..), program) where
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
@@ -44,9 +44,6 @@ instance Show Value where
   show Init = "\\uppercase{init}"
   show Args = "\\uppercase{args}"
   show Block = "\\uppercase{block}"
-
-parser :: SourceName -> String -> Either ParseError [AST Value]
-parser = parse program
 
 ε :: Parser String
 ε = string ""
