@@ -89,7 +89,9 @@ compoundBlock word = try $ compound <$> keyword word
                                     <*> initExp
                                     <*> (block <|> statement)
   where compound key initVal body = Node key [initVal, body]
-        initExp = Node Init <$> T.parens lexer (return <$> expression)
+ 
+initExp :: Parser (AST Value)
+initExp = Node Init <$> T.parens lexer (return <$> expression)
 
 wordBlock :: String -> Parser (AST Value)
 wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statementBlock))
@@ -102,6 +104,11 @@ ifElse :: Parser (AST Value)
 ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
             Node _ [elsePart]          <- wordBlock "else" <?> "else clause"
             return $ Node (Keyword "if") [initVal, blockVal, elsePart]
+
+doWhile :: Parser (AST Value)
+doWhile = do Node _ [doPart] <- wordBlock "do"
+             cond            <- T.reserved lexer "while" *> initExp
+             return $ Node (Keyword "do") [doPart, cond]
 
 compoundBlocks :: Parser (AST Value)
 compoundBlocks = choice $ try . compoundBlock <$> ["if", "while", "for", "with"]
@@ -120,6 +127,7 @@ terminatedStatement = (compoundBlocks
 
 statement :: Parser (AST Value)
 statement = (try ifElse
+         <|> try doWhile    
          <|> try funDef
          <|> terminatedStatement
          <|> block) <?> "statement"
