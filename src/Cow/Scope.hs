@@ -1,7 +1,7 @@
 module Cow.Scope (tag) where
 
 import Control.Applicative ((<$>), (<$), (<*>), (<*), (*>))
-import Control.Monad.State (State, get, put, runState)
+import Control.Monad.State (State, get, runState, modify)
 
 import Data.Maybe          (mapMaybe, listToMaybe)
 
@@ -26,17 +26,18 @@ getTag :: Eq a => a -> Scopes a -> Maybe Tag
 getTag val (Scopes _ scopes) = listToMaybe $ mapMaybe (lookup val) scopes
 
 pushScope :: WithScopes a ()
-pushScope = get >>= put . \ (Scopes lastTag scopes) -> Scopes lastTag ([]:scopes)
+pushScope = modify $ \ (Scopes lastTag scopes) -> Scopes lastTag ([]:scopes)
 
 popScope :: WithScopes a ()
-popScope = get >>= put . \ (Scopes lastTag scopes) -> Scopes lastTag (drop 1 scopes)
+popScope = modify $ \ (Scopes lastTag scopes) -> Scopes lastTag (drop 1 scopes)
         
 increment :: WithScopes a ()
-increment = get >>= put . \ (Scopes lastTag scopes) -> Scopes (succ lastTag) scopes
+increment = modify $ \ (Scopes lastTag scopes) -> Scopes (succ lastTag) scopes
         
 bind :: a -> WithScopes a ()
-bind val = do Scopes lastTag (curr:rest) <- get
-              put . Scopes (succ lastTag) $ ((val, lastTag):curr):rest
+bind val = modify bindVal >> increment
+  where bindVal (Scopes lastTag [])          = bindVal $ Scopes lastTag [[]]
+        bindVal (Scopes lastTag (curr:rest)) = Scopes lastTag $ ((val, lastTag):curr):rest
 
 newTag :: a -> WithScopes a (Tagged a)
 newTag val = do Scopes lastTag _ <- get

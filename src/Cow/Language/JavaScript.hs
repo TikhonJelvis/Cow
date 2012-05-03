@@ -10,6 +10,7 @@ import qualified Text.ParserCombinators.Parsec.Token as T
 import qualified Text.ParserCombinators.Parsec.Expr as E
 import Text.ParserCombinators.Parsec.Language (javaStyle)
 
+import Cow.Scope
 import Cow.Type
 
 data Value = Root
@@ -26,6 +27,7 @@ data Value = Root
            | Object
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Args
+           | Parameters
            | Block deriving (Eq)
                             
 instance Show Value where
@@ -44,6 +46,18 @@ instance Show Value where
   show Init = "\\uppercase{init}"
   show Args = "\\uppercase{args}"
   show Block = "\\uppercase{block}"
+
+instance Scopable Value where
+  bindings (Node Var children)        = getBindings <$> children
+  bindings (Node Parameters children) = getBindings <$> children
+  bindings _                          = []
+
+  newEnv Function = True
+  newEnv _        = False
+
+  bound Var{} = True 
+  bound _     = False
+  
 
 ε :: Parser String
 ε = string ""
@@ -81,7 +95,7 @@ funDef = T.reserved lexer "function" *>
   where func name args body = Node Function [name, args, body]
 
 parameterList :: Parser (AST Value)
-parameterList = Node Init . map (leaf . Var) <$> argList
+parameterList = Node Parameters . map (leaf . Var) <$> argList
   where argList = T.parens lexer . T.commaSep lexer $ T.identifier lexer
         
 compoundBlock :: String -> Parser (AST Value)
