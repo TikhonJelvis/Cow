@@ -28,6 +28,7 @@ data Value = Root
            | Init -- The bit between parentheses in loops, if statements and so on...
            | Args
            | Parameters
+           | Assign
            | Block deriving (Eq)
                             
 instance Show Value where
@@ -38,7 +39,7 @@ instance Show Value where
   show (Str s) = show s
   show (Regex r) = "/" ++ r ++ "/"
   show (Keyword k) = "\\textsc{" ++ k ++ "}"
-  show (Operator o) = if o == "." then "dot" else"$" ++ o ++ "$"
+  show (Operator o) = if o == "." then "dot" else "$" ++ o ++ "$"
   show Function = "\\uppercase{function}"
   show Call = "\\uppercase{call}"
   show Array = "\\uppercase{array}"
@@ -48,15 +49,23 @@ instance Show Value where
   show Block = "\\uppercase{block}"
 
 instance Scopable Value where
-  bindings (Node Var children)        = getBindings <$> children
-  bindings (Node Parameters children) = getBindings <$> children
+  bindings (Node Var children)        = children >>= getBindings
+  bindings (Node Parameters children) = children >>= getBindings
   bindings _                          = []
+
+  globalBindings n@(Node (Operator "=") _) = getBindings n
+  globalBindings _                         = []
 
   newEnv Function = True
   newEnv _        = False
 
   bound Var{} = True 
   bound _     = False
+  
+  where getBindings (Node Assign (v:_))         = [v]
+        getBindings (Node Parameters vs)        = vs
+        getBindings (Node (Operator "=" (v:_))) = [v]
+        getBindings _                           = []
   
 
 ε :: Parser String
@@ -158,7 +167,7 @@ varDecl = do keyword "var" *> spaces
              (return $ Node (Keyword "var") assignments) <?> "variable declaration"
              
 assignment :: Parser (AST Value)
-assignment = Node (Operator "=") <$> liftA2 (:)
+assignment = Node Assign <$> liftA2 (:)
                (var <* spaces <* string "=" <* spaces) (return <$> expression) <?> "assignment"
 
 funLit :: Parser (AST Value)
