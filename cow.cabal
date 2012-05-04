@@ -9,10 +9,10 @@ Name:                cow
 Version:             0.1
 
 -- A short (one-line) description of the package.
-Synopsis:            Semantic version control
+Synopsis:            Semantic version control.
 
 -- A longer description of the package.
--- Description:         
+Description:         An advanced diff and merge tool that parses code files and then compares the resulting ASTs rather than the actual text of the program. It's pretty cool.
 
 -- URL for the project homepage or repository.
 Homepage:            http://inst.eecs.berkeley.edu/~tikhon/cow
@@ -42,15 +42,20 @@ Build-type:          Simple
 -- Extra-source-files:  
 
 -- Constraint on the version of Cabal needed to build this package.
-Cabal-version:       >=1.2
+Cabal-version:       >=1.9.2
 
+Library
+  Build-depends:     base, parsec >= 3, list-extras >= 0.4, Diff >= 0.1, mtl >= 2
+  Hs-source-dirs:    src
+  Exposed-modules:   Cow.Diff, Cow.Scope, Cow.Type, Cow.Equality, Cow.Language.JavaScript
+  GHC-options:       -Wall -fno-warn-unused-do-bind
 
 Executable cow
   -- .hs or .lhs file containing the Main module.
-  -- Main-is:             
+  Main-is:           src/Cow/Main.hs
   
   -- Packages needed in order to build this package.
-  -- Build-depends:       
+  Build-depends:     base, parsec >= 3, cow
   
   -- Modules not exported by this package.
   -- Other-modules:       

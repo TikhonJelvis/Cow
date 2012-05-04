@@ -5,7 +5,16 @@ var a = 10,
 function blarg(a, b, c) {
   var d = a + b * c
   
-  return a + d * c + a
+  return {
+    result: a + d * c + a,
+    method : function () {
+      return {
+        a : a,
+        "b" : b,
+        "c" : c
+      }
+    }
+  }
 }
 
 do {
@@ -13,7 +22,7 @@ do {
   console.log("The value is: " + a, "Blarg")
   a += 10
   a -= 11
-} while (a > 0);
+} while (a > 0)
 
 (function (a, b) {
   return a + b;

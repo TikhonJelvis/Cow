@@ -32,26 +32,28 @@ data Value = Root
            | Block deriving (Eq)
                             
 instance Show Value where
-  show Root  = "\\uppercase{root}"
-  show Empty = "$\\epsilon$"
-  show (Var n) = n
-  show (Num n) = "$" ++ take (length (show n) - 2) (show n) ++"$"
-  show (Str s) = show s
-  show (Regex r) = "/" ++ r ++ "/"
-  show (Keyword k) = "\\textsc{" ++ k ++ "}"
+  show Root         = "\\uppercase{root}"
+  show Empty        = "$\\epsilon$"
+  show (Var n)      = n
+  show (Num n)      = "$" ++ take (length (show n) - 2) (show n) ++"$"
+  show (Str s)      = show s
+  show (Regex r)    = "/" ++ r ++ "/"
+  show (Keyword k)  = "\\textsc{" ++ k ++ "}"
   show (Operator o) = if o == "." then "dot" else "$" ++ o ++ "$"
-  show Function = "\\uppercase{function}"
-  show Call = "\\uppercase{call}"
-  show Array = "\\uppercase{array}"
-  show Object = "\\uppercase{object}"
-  show Init = "\\uppercase{init}"
-  show Args = "\\uppercase{args}"
-  show Block = "\\uppercase{block}"
+  show Function     = "\\uppercase{function}"
+  show Call         = "\\uppercase{call}"
+  show Array        = "\\uppercase{array}"
+  show Object       = "\\uppercase{object}"
+  show Init         = "\\uppercase{init}"
+  show Args         = "\\uppercase{args}"
+  show Block        = "\\uppercase{block}"
+  show Parameters   = "\\uppercase{parameters}"
+  show Assign       = "\\uppercase{assignment}"
 
 instance Scopable Value where
-  bindings (Node Var children)        = children >>= getBindings
-  bindings (Node Parameters children) = children >>= getBindings
-  bindings _                          = []
+  bindings (Node (Keyword "var") children) = children >>= getBindings
+  bindings (Node Parameters children)      = children >>= getBindings
+  bindings _                               = []
 
   globalBindings n@(Node (Operator "=") _) = getBindings n
   globalBindings _                         = []
@@ -62,10 +64,14 @@ instance Scopable Value where
   bound Var{} = True 
   bound _     = False
   
-  where getBindings (Node Assign (v:_))         = [v]
-        getBindings (Node Parameters vs)        = vs
-        getBindings (Node (Operator "=" (v:_))) = [v]
-        getBindings _                           = []
+getBindings :: AST Value -> [Value]
+getBindings (Node Assign (v:_))         = [val v]
+getBindings (Node Parameters vs)        = val <$> vs
+getBindings (Node (Operator "=") (v:_)) = [val v]
+getBindings _                           = []
+  
+val :: AST a -> a
+val (Node v _) = v
   
 
 ε :: Parser String
@@ -88,7 +94,7 @@ lexer = T.makeTokenParser $ javaStyle {
   T.reservedOpNames = nub $ concat operators ++ concat unaryOperators ++ ["?", ":"],
   T.reservedNames = ["break", "catch", "const", "continue", "do", "export",
                      "for", "function", "if", "import", "label",
-                     "let", "return", "switch", "this", "throw", "try", 
+                     "let", "return", "switch", "throw", "try", 
                      "var", "while", "with", "yield"]
   }
             
@@ -198,9 +204,9 @@ indexOrCall = do base  <- simpleAtom
                  return $ foldl (\ fn args -> Node Call [fn, Node Args args]) base calls
 
 objLit :: Parser (AST Value)
-objLit = Node Object <$> bindings
-  where bindings = T.braces lexer . T.commaSep lexer $
-                   pair <$> (str <|> var) <*> (T.colon lexer *> expression)
+objLit = Node Object <$> properties
+  where properties = T.braces lexer . T.commaSep lexer $
+                     pair <$> (str <|> var) <*> (T.colon lexer *> expression)
         pair name value = Node (Operator ":") [name, value]
 
 simpleAtom :: Parser (AST Value)

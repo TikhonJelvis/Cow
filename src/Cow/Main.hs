@@ -44,3 +44,6 @@ testParse :: IO ()
 testParse = parseFromFile JS.program "test.js" >>= toTreeLaTeX
   where  printRes (Right res) = print $ Node JS.Root res
          printRes (Left err)  = print err
+         
+main :: IO ()
+main = testParse

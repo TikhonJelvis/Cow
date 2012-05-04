@@ -1,6 +1,8 @@
 {-# LANGUAGE ParallelListComp #-}
 module Cow.Diff where
 
+import Prelude hiding (mod)
+
 import Data.Algorithm.Diff     (getDiff, DI(..))
 import Data.Function           (on)
 import Data.Functor            ((<$>))

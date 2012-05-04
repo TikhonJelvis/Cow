@@ -1,4 +1,4 @@
-module Cow.Scope (tag) where
+module Cow.Scope (tag, Tagged(..), Tag, Scopable, bindings, globalBindings, newEnv, bound) where
 
 import Control.Applicative ((<$>), (<$), (<*>), (<*), (*>))
 import Control.Monad.State (State, get, put, runState, modify)
