@@ -80,6 +80,9 @@ val (Node v _) = v
 terminator :: Parser ()
 terminator = optional (oneOf ";\n") <|> eof
 
+separators :: Parser ()
+separators = skipMany (space <|> char ';') 
+
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
              [">>", ">>>", "<<"], ["<", "<=", ">", ">=", "in", "instanceof"],
@@ -102,7 +105,7 @@ keyword :: String -> Parser Value
 keyword word = Keyword word <$ T.reserved lexer word <?> word
 
 program :: Parser [AST Value]
-program = T.whiteSpace lexer *> many (statement <* spaces)
+program = T.whiteSpace lexer *> many (statement <* separators)
 
 funDef :: Parser (AST Value)
 funDef = T.reserved lexer "function" *>
@@ -130,7 +133,7 @@ block :: Parser (AST Value)
 block = Node Block <$> T.braces lexer program <?> "block"
         
 ifElse :: Parser (AST Value)
-ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* spaces
+ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* T.whiteSpace lexer
             Node _ [elsePart]          <- wordBlock "else" <?> "else clause"
             return $ Node (Keyword "if") [initVal, blockVal, elsePart]
 
@@ -152,7 +155,7 @@ terminatedStatement = (compoundBlocks
                    <|> leaf <$> keyword "continue"
                    <|> returnStmt
                    <|> varDecl
-                   <|> expression) <* terminator <* spaces
+                   <|> expression) <* terminator <* separators
 
 statement :: Parser (AST Value)
 statement = (try ifElse
@@ -168,13 +171,12 @@ str :: Parser (AST Value)
 str = leaf . Str <$> T.stringLiteral lexer <?> "string literal"
         
 varDecl :: Parser (AST Value)
-varDecl = do keyword "var" *> spaces
+varDecl = do keyword "var"
              assignments <- T.commaSep1 lexer $ try assignment <|> var
              (return $ Node (Keyword "var") assignments) <?> "variable declaration"
              
 assignment :: Parser (AST Value)
-assignment = Node Assign <$> liftA2 (:)
-               (var <* spaces <* string "=" <* spaces) (return <$> expression) <?> "assignment"
+assignment = Node Assign <$> liftA2 (:) (var <* T.reservedOp lexer "=") (return <$> expression) <?> "assignment"
 
 funLit :: Parser (AST Value)
 funLit = T.reserved lexer "function" *> (func <$> parameterList <*> block)

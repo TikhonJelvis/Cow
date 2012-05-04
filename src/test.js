@@ -22,7 +22,7 @@ do {
   console.log("The value is: " + a, "Blarg")
   a += 10
   a -= 11
-} while (a > 0)
+} while (a > 0);
 
 (function (a, b) {
   return a + b;
