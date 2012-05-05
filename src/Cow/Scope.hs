@@ -9,7 +9,9 @@ import Cow.Type
 
 type Tag = Int
 
-data Tagged a = Tagged Tag a deriving (Show, Eq)
+data Tagged a = Tagged Tag a deriving (Eq)
+
+instance Show a => Show (Tagged a) where show (Tagged i a) = "$\\langle" ++ show i ++ "\\rangle$ " ++ show a
 
 instance Functor Tagged where fmap fn (Tagged i a) = Tagged i $ fn a
 
@@ -19,9 +21,12 @@ type WithScopes a = State (Scopes a)
 
 class Scopable a where
   bindings :: AST a -> [a]       -- For things that introduce bindings into the local scope.
-  globalBindings :: AST a -> [a] -- For things that add bindings to the root environment.
   newEnv   :: a -> Bool          -- For things that introduce a new scope.
   bound    :: a -> Bool          -- For things that can be bound (e.g. variable names).
+
+  globalBindings :: AST a -> [a] -- For things that add bindings to the root environment.
+  globalBindings _ = []
+
   
 getTag :: Eq a => a -> Scopes a -> Maybe Tag
 getTag val (Scopes _ scopes) = listToMaybe $ mapMaybe (lookup val) scopes

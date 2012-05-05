@@ -1,3 +1,10 @@
+if (typeof abc === "undefined") {
+  abc = def
+} else {
+  old = abc
+  abc = def
+}
+
 var a = 10,
     b,
     c;
@@ -15,6 +22,11 @@ function blarg(a, b, c) {
       }
     }
   }
+}
+
+for (var i = 0; i < 10; i++) {
+  console.log(i)
+  for (var j = 0; j < i; j++) console.log(j)
 }
 
 do {

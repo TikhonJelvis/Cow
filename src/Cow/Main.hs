@@ -5,6 +5,7 @@ import Control.Applicative ((*>), (<*), (<$>), (<*>))
 import Text.ParserCombinators.Parsec
 
 import Cow.Diff
+import Cow.Scope
 import Cow.Type
 
 import qualified Cow.Language.JavaScript as JS
@@ -24,10 +25,10 @@ toTreeLaTeX inp = case inp of
   Right tree -> writeFile "out.ltx" (out tree)
   Left  err  -> print err
   where out tree = unlines ["\\documentclass[10pt]{article}",
-                            "\\usepackage[margin=1in, paperwidth=30in, textwidth=30in, paperheight=10in]{geometry}",
+                            "\\usepackage[margin=1in, paperwidth=100in, textwidth=100in, paperheight=10in]{geometry}",
                             "\\usepackage{change}",
                             "\\begin{document}",
-                            "\\synttree" ++ show (Node JS.Root tree),
+                            "\\synttree" ++ (show . tag $ Node JS.Root tree),
                             "\\end{document}"]
 
 nums :: Parser (AST Integer)

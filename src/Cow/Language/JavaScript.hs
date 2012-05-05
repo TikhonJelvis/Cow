@@ -16,6 +16,7 @@ import Cow.Type
 data Value = Root
            | Empty
            | Var      String
+           | Key      String -- The name of an object's field
            | Num      Double
            | Str      String
            | Regex    String
@@ -37,6 +38,7 @@ instance Show Value where
   show (Var n)      = n
   show (Num n)      = "$" ++ take (length (show n) - 2) (show n) ++"$"
   show (Str s)      = show s
+  show (Key k)      = "\\textbf{" ++ k ++ "}"
   show (Regex r)    = "/" ++ r ++ "/"
   show (Keyword k)  = "\\textsc{" ++ k ++ "}"
   show (Operator o) = if o == "." then "dot" else "$" ++ o ++ "$"
@@ -67,12 +69,12 @@ instance Scopable Value where
 getBindings :: AST Value -> [Value]
 getBindings (Node Assign (v:_))         = [val v]
 getBindings (Node Parameters vs)        = val <$> vs
+getBindings (Node v@Var{} [])           = [v]
 getBindings (Node (Operator "=") (v:_)) = [val v]
 getBindings _                           = []
   
 val :: AST a -> a
 val (Node v _) = v
-  
 
 ε :: Parser String
 ε = string ""
@@ -119,19 +121,22 @@ parameterList = Node Parameters . map (leaf . Var) <$> argList
 compoundBlock :: String -> Parser (AST Value)
 compoundBlock word = try $ compound <$> keyword word
                                     <*> initExp
-                                    <*> (block <|> statement)
+                                    <*> optBlock
   where compound key initVal body = Node key [initVal, body]
  
 initExp :: Parser (AST Value)
 initExp = Node Init <$> T.parens lexer (return <$> expression)
 
 wordBlock :: String -> Parser (AST Value)
-wordBlock word = Node <$> try (keyword word) <*> (return <$> (block <|> statementBlock))
-  where statementBlock = do content <- statement
-                            return $ Node Block [content]
+wordBlock word = Node <$> try (keyword word) <*> (return <$> optBlock)
+
 block :: Parser (AST Value)
 block = Node Block <$> T.braces lexer program <?> "block"
         
+optBlock :: Parser (AST Value)
+optBlock = block <|> toBlock <$> statement
+  where toBlock n = Node Block [n]
+
 ifElse :: Parser (AST Value)
 ifElse = do Node _ [initVal, blockVal] <- compoundBlock "if" <* T.whiteSpace lexer
             Node _ [elsePart]          <- wordBlock "else" <?> "else clause"
@@ -148,6 +153,13 @@ compoundBlocks = choice $ try . compoundBlock <$> ["if", "while", "for", "with"]
 returnStmt :: Parser (AST Value)
 returnStmt = (Node <$> (Keyword "return" <$ T.reserved lexer "return")
                    <*> (maybeToList <$> optionMaybe statement)) <?> "return statement"
+             
+forLoop :: Parser (AST Value)
+forLoop = do keyword "for"
+             (i, c, a) <- T.parens lexer $ (,,) <$> statement <*> statement <*> statement
+             let initVal = Node Init [i, c, a]
+             body      <- optBlock
+             return $ Node (Keyword "for") [initVal, body]
 
 terminatedStatement :: Parser (AST Value)
 terminatedStatement = (compoundBlocks
@@ -159,7 +171,8 @@ terminatedStatement = (compoundBlocks
 
 statement :: Parser (AST Value)
 statement = (try ifElse
-         <|> try doWhile    
+         <|> try doWhile
+         <|> try forLoop
          <|> try funDef
          <|> terminatedStatement
          <|> block) <?> "statement"
@@ -209,7 +222,10 @@ objLit :: Parser (AST Value)
 objLit = Node Object <$> properties
   where properties = T.braces lexer . T.commaSep lexer $
                      pair <$> (str <|> var) <*> (T.colon lexer *> expression)
-        pair name value = Node (Operator ":") [name, value]
+        pair name value = Node (Operator ":") [toKey name, value]
+        toKey (Node (Var v) []) = Node (Key v) []
+        toKey (Node (Str v) []) = Node (Key v) []
+        toKey k                 = k                
 
 simpleAtom :: Parser (AST Value)
 simpleAtom =  str
