@@ -36,15 +36,20 @@ nums = char '[' *> spaces *> (Node <$> value <*> children) <* char ']'
   where value    = read <$> many1 digit <* spaces
         children = many (nums <* spaces)
 
-draw :: String -> String -> IO ()
-draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
-  Right val -> toLaTeX inp1 inp2 val
-  Left  err -> putStrLn $ "Error: " ++ show err
+-- draw :: String -> String -> IO ()
+-- draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
+--   Right val -> toLaTeX inp1 inp2 val
+--   Left  err -> putStrLn $ "Error: " ++ show err
   
 testParse :: IO ()
 testParse = parseFromFile JS.program "test.js" >>= toTreeLaTeX
   where  printRes (Right res) = print $ Node JS.Root res
          printRes (Left err)  = print err
          
+testDiff :: String -> String -> IO ()
+testDiff inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
+  Right val -> toLaTeX inp1 inp2 val
+  Left err  -> putStrLn $ "Error: " ++ show err
+         
 main :: IO ()
-main = testParse
+main = testDiff "[0[1[2][3][4]][5]]" "[0[1[2[6]][3]][7][5]]"
