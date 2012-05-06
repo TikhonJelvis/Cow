@@ -8,6 +8,7 @@ import Data.Function          (on)
 import Data.List.Extras.Argmax
 import Data.Maybe             (listToMaybe, mapMaybe, fromJust)
 
+import Cow.Diff
 import Cow.Type
   
 match :: Eq a => AST a -> AST a -> [(AST a, AST a)]
@@ -29,8 +30,7 @@ findAST i n@(Node (i', _) children)
   | otherwise = listToMaybe $ mapMaybe (findAST i) children
 
 weight :: Eq a => AST a -> AST a -> Double
-weight a b | a == b     = 0
-           | otherwise = 1
+weight a b = weighDiff 0.5 $ diff a b 
 
 number :: AST a -> AST (Int, a)
 number = snd . go 1
