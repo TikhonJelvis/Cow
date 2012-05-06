@@ -6,6 +6,7 @@ import Text.ParserCombinators.Parsec
 
 import Cow.Diff
 import Cow.Scope
+import Cow.Substructure
 import Cow.Type
 
 import qualified Cow.Language.JavaScript as JS

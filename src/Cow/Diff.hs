@@ -14,12 +14,12 @@ diffForest ls []          = map (Del <$>) ls
 diffForest [] ls          = map (Ins <$>) ls
 diffForest (l@(Node lRoot lChildren):ls) (r@(Node rRoot rChildren):rs) =
   argmin (weigh 0.9 <$>) [removed, added, modified]
-  where removed              = (Del <$> l) : diffForest ls (r:rs)
-        added                = (Ins <$> r) : diffForest (l:ls) rs
-        modified | lRoot     == rRoot = Node (Non lRoot) childrenDiff : rest
-                 | otherwise = Node (Mod lRoot rRoot) childrenDiff : rest
-        childrenDiff         = diffForest lChildren rChildren
-        rest                 = diffForest ls rs
+  where removed                   = (Del <$> l) : diffForest ls (r:rs)
+        added                     = (Ins <$> r) : diffForest (l:ls) rs
+        modified | lRoot == rRoot  = Node (Non lRoot) childrenDiff : rest
+                 | otherwise      = Node (Mod lRoot rRoot) childrenDiff : rest
+        childrenDiff              = diffForest lChildren rChildren
+        rest                      = diffForest ls rs
             
 weigh :: Double -> Diff a -> Double
 weigh α (Node val children) = weight val + sum (weigh (α**2) <$> children)

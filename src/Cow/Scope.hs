@@ -7,14 +7,6 @@ import Data.Maybe          (mapMaybe, listToMaybe, isJust, fromJust)
 
 import Cow.Type
 
-type Tag = Int
-
-data Tagged a = Tagged Tag a deriving (Eq)
-
-instance Show a => Show (Tagged a) where show (Tagged i a) = "$\\langle" ++ show i ++ "\\rangle$ " ++ show a
-
-instance Functor Tagged where fmap fn (Tagged i a) = Tagged i $ fn a
-
 data Scopes a = Scopes Tag [[(a, Tag)]]
                               
 type WithScopes a = State (Scopes a)

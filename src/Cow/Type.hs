@@ -9,6 +9,9 @@ data AST a = Node a [AST a] deriving (Eq)
 
 leaf :: a -> AST a
 leaf = (`Node` [])
+  
+val :: AST a -> a
+val (Node v _) = v
 
 instance Functor AST where fmap fn (Node v children) = Node (fn v) $ map (fmap fn) children 
 
@@ -36,3 +39,10 @@ instance ExtEq a => Eq (ExtWrap a) where ExtWrap a == ExtWrap b = a ?= b
 data IdWrap a = IdWrap Integer a deriving (Show)
 instance Eq (IdWrap a) where (IdWrap n1 _) == (IdWrap n2 _) = n1 == n2
 
+type Tag = Int
+
+data Tagged a = Tagged Tag a deriving (Eq)
+
+instance Show a => Show (Tagged a) where show (Tagged i a) = "$\\langle" ++ show i ++ "\\rangle$ " ++ show a
+
+instance Functor Tagged where fmap fn (Tagged i a) = Tagged i $ fn a

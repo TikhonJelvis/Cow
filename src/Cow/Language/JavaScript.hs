@@ -72,9 +72,6 @@ getBindings (Node Parameters vs)        = val <$> vs
 getBindings (Node v@Var{} [])           = [v]
 getBindings (Node (Operator "=") (v:_)) = [val v]
 getBindings _                           = []
-  
-val :: AST a -> a
-val (Node v _) = v
 
 ε :: Parser String
 ε = string ""
