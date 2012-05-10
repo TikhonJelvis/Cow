@@ -49,3 +49,12 @@ data Tagged a = Tagged Tag a deriving (Eq)
 instance Show a => Show (Tagged a) where show (Tagged i a) = "$\\langle" ++ show i ++ "\\rangle$ " ++ show a
 
 instance Functor Tagged where fmap fn (Tagged i a) = Tagged i $ fn a
+                              
+type Merged a = AST (Conflict a)
+
+data Conflict a = Conflict (Change a) (Change a)
+                | NoConflict (Change a) deriving Eq
+                                                 
+instance Show a => Show (Conflict a) where
+  show (Conflict a b) = "\\Conflict{" ++ show a ++ "}{" ++ show b ++ "}"
+  show (NoConflict a) = "\\NoConflict{" ++ show a ++ "}"
