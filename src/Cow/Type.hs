@@ -23,13 +23,16 @@ data Change a = Ins a
               | Del a
               | Mod a a
               | Non a -- No change
-              deriving (Eq)
+              | From Tag a
+              | To Tag a deriving (Eq)
                        
 instance Show a => Show (Change a) where 
-  show (Ins a) = "\\Ins{" ++ show a ++ "}"
-  show (Del a) = "\\Del{" ++ show a ++ "}"
-  show (Mod a b) = "\\Mod{" ++ show a ++ "}{" ++ show b ++ "}"
-  show (Non a) = "\\Non{" ++ show a ++ "}"
+  show (Ins a)    = "\\Ins{" ++ show a ++ "}"
+  show (Del a)    = "\\Del{" ++ show a ++ "}"
+  show (Mod a b)  = "\\Mod{" ++ show a ++ "}{" ++ show b ++ "}"
+  show (Non a)    = "\\Non{" ++ show a ++ "}"
+  show (From t a) = "\\From{" ++ show t ++ "}{" ++ show a ++ "}"
+  show (To t a)   = "\\To{" ++ show t ++ "}{" ++ show a ++ "}"
                        
 type Diff a = AST (Change a)
 

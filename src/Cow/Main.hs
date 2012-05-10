@@ -48,9 +48,9 @@ testParse = parseFromFile JS.program "test.js" >>= toTreeLaTeX
          printRes (Left err)  = print err
          
 testDiff :: String -> String -> IO ()
-testDiff inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
+testDiff inp1 inp2 = case tagDiff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
   Right val -> toLaTeX inp1 inp2 val
   Left err  -> putStrLn $ "Error: " ++ show err
          
 main :: IO ()
-main = testDiff "[0[1[2][3][4]][5]]" "[0[1[2[6]][3]][7][5]]"
+main = testDiff "[0[14[15[16[12[13[1[5[11][8[10][9]]][6][7]]]]]]]]" "[0[14[11][8[10][9]][15[16[12[13[1[5][6][7]]]]]]]]"
