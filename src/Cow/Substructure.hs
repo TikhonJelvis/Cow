@@ -1,6 +1,7 @@
 module Cow.Substructure where
 
 import Control.Applicative    ((<$>), (<*>))
+import Control.Monad
 
 import Data.Algorithm.Munkres (hungarianMethodDouble)
 import Data.Array.Unboxed
@@ -9,6 +10,8 @@ import Data.Function          (on)
 import Data.List              (sortBy)
 import Data.List.Extras.Argmax
 import Data.Maybe             (listToMaybe, mapMaybe, fromJust)
+
+import Debug.Trace
 
 import Cow.Diff
 import Cow.Type
@@ -21,7 +24,7 @@ propagate fn (Right v) = Right $ fn v
 
 tagDiff :: (Show a, Eq a) => AST a -> AST a -> Diff a
 tagDiff left right = foldr combine (diff left right) . zip [1..] $ matches
-  where matches = sortBy (compare `on` weighMatching) $ match left right
+  where matches = join traceShow $ sortBy (compare `on` weighMatching) $ match left right
         weighMatching (l, r) = subjectiveWeight $ diff l r
         combine (i, matching) oldTree = tagMatching i matching oldTree
                                         

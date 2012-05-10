@@ -15,7 +15,7 @@ diffForest [] [] = []
 diffForest ls [] = map (Del <$>) ls
 diffForest [] ls = map (Ins <$>) ls
 diffForest (l@(Node lRoot lChildren):ls) (r@(Node rRoot rChildren):rs) =
-  argmin (weighDiff α <$>) [removed, added, modified]
+  argmin (weighDiff α <$>) [modified, removed, added]
   where α = 0.1
         removed                  = (Del <$> l) : diffForest ls (r:rs)
         added                    = (Ins <$> r) : diffForest (l:ls) rs
@@ -29,5 +29,5 @@ weighDiff α (Node (Ins a) _)    = α
 weighDiff α (Node (Del a) _)    = α
 weighDiff α (Node val children) = weight val + α * (sum $ weighDiff α <$> children)
   where weight Non{} = 0
-        weight Mod{} = α
+        weight Mod{} = 0.1 * α
         weight _     = α

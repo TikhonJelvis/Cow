@@ -1,4 +1,4 @@
-module Cow.Language.JavaScript (Value(..), program) where
+module Cow.Language.JavaScript (Value(..), parser, program) where
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 
@@ -102,6 +102,9 @@ lexer = T.makeTokenParser $ javaStyle {
             
 keyword :: String -> Parser Value
 keyword word = Keyword word <$ T.reserved lexer word <?> word
+
+parser :: Parser (AST Value)
+parser = Node Root <$> program
 
 program :: Parser [AST Value]
 program = T.whiteSpace lexer *> many (statement <* separators)
