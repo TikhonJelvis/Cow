@@ -1,0 +1,6 @@
+\documentclass[12pt]{article}
+\usepackage{change}
+\usepackage[margin=1in, paperwidth=100in, textwidth=100in, paperheight=10in]{geometry}
+\begin{document}
+\synttree[\Non{\uppercase{root}}[\Non{\textsc{var}}[\Non{\uppercase{assignment}}[\Mod{x}{a}] [\Non{$0$}]] [\Non{\uppercase{assignment}}[\Mod{y}{b}] [\Non{$0$}]]] [\Non{\textsc{while}}[\Non{\uppercase{init}}[\Non{$==$}[\Mod{x}{a}] [\Non{$0$}]]] [\Non{\uppercase{block}}[\Non{$post++$}[\Mod{x}{a}]] [\Non{$post++$}[\Mod{y}{b}]] [\Non{dot}[\Non{console}] [\Non{\uppercase{call}}[\Non{log}] [\Non{\uppercase{args}}[\Mod{x}{a}] [\Mod{y}{b}]]]]]] [\Ins{\uppercase{call}}[\Ins{alert}] [\Ins{\uppercase{args}}[\Ins{"Hello, world"}]]] [\Ins{\uppercase{function}}[\Ins{\uppercase{parameters}}[\Ins{a}] [\Ins{b}]] [\Ins{\uppercase{block}}[\Ins{\textsc{return}}[\Ins{$+$}[\Ins{a}] [\Ins{b}]]]]]]
+\end{document}
