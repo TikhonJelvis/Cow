@@ -1,7 +1,7 @@
 module Cow.Substructure where
 
 import Control.Applicative    ((<$>), (<*>))
-import Control.Monad
+import Control.DeepSeq
 
 import Data.Algorithm.Munkres (hungarianMethodDouble)
 import Data.Array.Unboxed
@@ -10,8 +10,6 @@ import Data.Function          (on)
 import Data.List              (sortBy)
 import Data.List.Extras.Argmax
 import Data.Maybe             (listToMaybe, mapMaybe, fromJust)
-
-import Debug.Trace
 
 import Cow.Diff
 import Cow.Type
@@ -22,13 +20,13 @@ propagate :: (a -> b) -> Either a a -> Either b b
 propagate fn (Left v) = Left $ fn v
 propagate fn (Right v) = Right $ fn v
 
-tagDiff :: (Show a, Eq a) => AST a -> AST a -> Diff a
+tagDiff :: (NFData a, Eq a) => AST a -> AST a -> Diff a
 tagDiff left right = foldr combine (diff left right) . zip [1..] $ matches
-  where matches = join traceShow $ sortBy (compare `on` weighMatching) $ match left right
+  where matches = sortBy (compare `on` weighMatching) $ match left right
         weighMatching (l, r) = subjectiveWeight $ diff l r
         combine (i, matching) oldTree = tagMatching i matching oldTree
                                         
-tagMatching :: (Show a, Eq a) => Tag -> Matching a -> Diff a -> Diff a
+tagMatching :: (NFData a, Eq a) => Tag -> Matching a -> Diff a -> Diff a
 tagMatching tagId (removed, added) diffTree
   | otherwise = either id id $ tagRemoved diffTree >>= tagAdded
   where toFrom (Del a) = (From tagId a)
@@ -49,7 +47,7 @@ tagMatching tagId (removed, added) diffTree
           | otherwise = (newChildren ++ [newChild], True)
         merge (newChildren, found) (child, Left{}) = (newChildren ++ [child], found)
 
-match :: Eq a => AST a -> AST a -> [Matching a]
+match :: (NFData a, Eq a) => AST a -> AST a -> [Matching a]
 match left right = map toPair . fst $ hungarianMethodDouble inputArray 
   where pairs = allPairs numLeft numRight
         numLeft  = number left
@@ -71,7 +69,7 @@ subjectiveWeight :: Eq a => Diff a -> Double
 subjectiveWeight (Node Non{} children) = 1 + sum (subjectiveWeight <$> children)
 subjectiveWeight (Node _ children)     = 0 + sum (subjectiveWeight <$> children)
 
-weight :: Eq a => AST a -> AST a -> Double
+weight :: (NFData a, Eq a) => AST a -> AST a -> Double
 weight a b = weighDiff 0.1 $ diff a b
 
 number :: AST a -> AST (Int, a)

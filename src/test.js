@@ -1,9 +1,8 @@
+var array = [1,2,3,2 + 5, blarg(100)]
+
 if (typeof abc === "undefined") {
   abc = def
-} else {
-  old = abc
-  abc = def
-}
+} 
 
 var a = 10,
     b,
@@ -29,12 +28,12 @@ for (var i = 0; i < 10; i++) {
   for (var j = 0; j < i; j++) console.log(j)
 }
 
-do {
+while (a > 0) {
   a -= 2
   console.log("The value is: " + a, "Blarg")
   a += 10
   a -= 11
-} while (a > 0);
+}
 
 (function (a, b) {
   return a + b;

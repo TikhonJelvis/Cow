@@ -1,8 +1,9 @@
 module Cow.Language.JavaScript (Value(..), parser, program) where
 
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
+import Control.DeepSeq
 
-import Data.List  (nub)
+import Data.List  (nub, intercalate)
 import Data.Maybe (maybeToList)
 
 import Text.ParserCombinators.Parsec 
@@ -35,7 +36,7 @@ data Value = Root
 instance Show Value where
   show Root         = "\\uppercase{root}"
   show Empty        = "$\\epsilon$"
-  show (Var n)      = n
+  show (Var v)      = v
   show (Num n)      = "$" ++ take (length (show n) - 2) (show n) ++"$"
   show (Str s)      = show s
   show (Key k)      = "\\textbf{" ++ k ++ "}"
@@ -51,6 +52,8 @@ instance Show Value where
   show Block        = "\\uppercase{block}"
   show Parameters   = "\\uppercase{parameters}"
   show Assign       = "\\uppercase{assignment}"
+
+instance NFData Value
 
 instance Scopable Value where
   bindings (Node (Keyword "var") children) = children >>= getBindings
@@ -226,6 +229,10 @@ objLit = Node Object <$> properties
         toKey (Node (Var v) []) = Node (Key v) []
         toKey (Node (Str v) []) = Node (Key v) []
         toKey k                 = k                
+        
+arrayLit :: Parser (AST Value)
+arrayLit = Node Array <$> vals
+  where vals = T.squares lexer $ T.commaSep lexer expression
 
 simpleAtom :: Parser (AST Value)
 simpleAtom =  str
@@ -235,6 +242,7 @@ simpleAtom =  str
           <|> (T.parens lexer expression <?> "parenthesized expression")
           <|> try funLit
           <|> try objLit
+          <|> try arrayLit
           <|> var
               
 atom :: Parser (AST Value)
