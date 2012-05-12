@@ -68,11 +68,6 @@ testDiff :: String -> String -> IO ()
 testDiff inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
   Right val -> toLaTeX' inp1 inp2 val
   Left err  -> putStrLn $ "Error: " ++ show err
-  
-testDiff' :: String -> String -> IO ()
-testDiff' inp1 inp2 = case diff' <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
-  Right val -> toLaTeX' inp1 inp2 val
-  Left err  -> putStrLn $ "Error: " ++ show err
 
 testMerge :: String -> String -> String -> IO ()
 testMerge b l r = case resolveConflicts <$> get b <*> get l <*> get r of
