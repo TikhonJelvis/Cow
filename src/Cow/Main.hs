@@ -26,7 +26,7 @@ toLaTeX' left right result = writeFile "out.ltx" out
                        "\\end{document}"]
 
 
-toLaTeX base left right d1 d2 d3 result = writeFile "out.ltx" out
+toLaTeX outFile base left right d1 d2 d3 result = writeFile (outFile ++ ".ltx") out
   where out = unlines ["\\documentclass[12pt]{article}",
                        "\\usepackage[margin=1in, paperwidth=40in, textwidth=40in, paperheight=10in]{geometry}",
                        "\\usepackage{change}",
@@ -76,25 +76,25 @@ testJSDiff inp1 inp2 = case tagDiff <$> parse JS.parser "left" inp1 <*> parse JS
   Right val -> toLaTeX' inp1 inp2 val
   Left err  -> putStrLn $ "Error: " ++ show err
 
-testMerge :: String -> String -> String -> IO ()
-testMerge b l r = case resolveConflicts <$> get b <*> get l <*> get r of
-  Right (val, d1, d2, d3) -> toLaTeX "" "" "" (show d1) (show d2) (show d3) val
+testMerge :: String -> String -> String -> String -> IO ()
+testMerge b l r out = case resolveConflicts <$> get b <*> get l <*> get r of
+  Right (val, d1, d2, d3) -> toLaTeX out "" "" "" (show d1) (show d2) (show d3) val
   Left err  -> print err
   where get a = parse JS.parser "js" a
         
-testFileMerge :: String -> String -> String -> IO ()
-testFileMerge b l r = do b' <- readFile b
-                         l' <- readFile l
-                         r' <- readFile r
-                         testMerge b' l' r'
+testFileMerge :: String -> String -> String -> String -> IO ()
+testFileMerge b l r out = do b' <- readFile b
+                             l' <- readFile l
+                             r' <- readFile r
+                             testMerge b' l' r' out
 
-testDisplay :: String -> String -> IO ()
-testDisplay lFile rFile = do l <- parseFromFile JS.parser lFile
-                             r <- parseFromFile JS.parser rFile
-                             toHTML' l r
-  where toHTML' (Right l) (Right r) = do writeFile "out.html" . toHTML . displayDiff $ tagDiff l r
-                                         writeFile "out.ltx" . toLaTeX  $ tagDiff l r
-        toHTML' _ _ = putStrLn "Parser error!"
+testDisplay :: String -> String -> String -> IO ()
+testDisplay lFile rFile out = do l <- parseFromFile JS.parser lFile
+                                 r <- parseFromFile JS.parser rFile
+                                 toHTML' l r out
+  where toHTML' (Right l) (Right r) out = do writeFile (out ++ ".html") . toHTML . displayDiff $ tagDiff l r
+                                             writeFile (out ++ ".ltx") . toLaTeX  $ tagDiff l r
+        toHTML' _ _ _ = putStrLn "Parser error!"
         toLaTeX result =  unlines ["\\documentclass[12pt]{article}",
                                    "\\usepackage{change}",
                                    "\\usepackage[margin=1in, paperwidth=100in, textwidth=100in, paperheight=10in]{geometry}",
@@ -108,8 +108,6 @@ main :: IO ()
 main = do args <- getArgs
           case args of 
             [] -> putStrLn usage
-            ["diff", l, r] -> do l' <- readFile l 
-                                 r' <- readFile r
-                                 testJSDiff l' r'
-            ["merge", b, l, r] -> testFileMerge b l r
+            ["diff", l, r, out] -> testDisplay l r out
+            ["merge", b, l, r, out] -> testFileMerge b l r out
             _ -> putStrLn usage
