@@ -47,9 +47,6 @@ instance NFData a => NFData (Change a) where
 
 type Diff a = AST (Change a)
 
-data IdWrap a = IdWrap Integer a deriving (Show)
-instance Eq (IdWrap a) where (IdWrap n1 _) == (IdWrap n2 _) = n1 == n2
-
 type Tag = Int
 
 data Tagged a = Tagged Tag a deriving (Eq)
