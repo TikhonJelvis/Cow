@@ -1,0 +1,14 @@
+% Formatting for the Change type in Cow.Type
+
+\RequirePackage{color}
+\RequirePackage{synttree}
+\RequirePackage[usenames,dvipsnames]{xcolor}
+
+\newcommand{\Non}[1]{$#1$}
+\newcommand{\Mod}[2]{\colorbox{SkyBlue}{$#1 \to #2$}}
+\newcommand{\Ins}[1]{\colorbox{Emerald}{#1}}
+\newcommand{\Del}[1]{\colorbox{Maroon}{#1}}
+\newcommand{\From}[2]{\colorbox{Goldenrod}{$\langle #1 \rangle$#2}}
+\newcommand{\To}[2]{\colorbox{GreenYellow}{$\langle #1 \rangle$#2}}
+\newcommand{\Conflict}[2]{#1 $\ne$ #2}
+\newcommand{\NoConflict}[1]{#1}

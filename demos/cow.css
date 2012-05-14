@@ -1,0 +1,27 @@
+body {
+    font-family : monospace;
+}
+
+.block {
+    padding-left : 1em;
+}
+
+.ins {
+    background-color : #3D3;
+}
+
+.del {
+    background-color : #D33;
+}
+
+.mod {
+    background-color : #D90;
+}
+
+.to {
+    background-color : #99F;
+}
+
+.from {
+    background-color : #F99;
+}
