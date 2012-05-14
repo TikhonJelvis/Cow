@@ -21,7 +21,7 @@ class Scopable a where
 
   
 getTag :: Eq a => a -> Scopes a -> Maybe Tag
-getTag val (Scopes _ scopes) = listToMaybe $ mapMaybe (lookup val) scopes
+getTag value (Scopes _ scopes) = listToMaybe $ mapMaybe (lookup value) scopes
 
 pushScope :: WithScopes a ()
 pushScope = modify $ \ (Scopes lastTag scopes) -> Scopes lastTag ([]:scopes)
@@ -33,30 +33,30 @@ increment :: WithScopes a ()
 increment = modify $ \ (Scopes lastTag scopes) -> Scopes (succ lastTag) scopes
         
 bind :: Eq a => a -> WithScopes a ()
-bind val = modify bindVal >> increment
+bind value = modify bindVal >> increment
   where bindVal (Scopes lastTag []) = bindVal $ Scopes lastTag [[]]
         bindVal scope@(Scopes lastTag (curr:rest))
-          | isJust (lookup val curr)= scope
-          | otherwise               = Scopes lastTag $ ((val, lastTag):curr):rest
+          | isJust (lookup value curr)= scope
+          | otherwise               = Scopes lastTag $ ((value, lastTag):curr):rest
 
 globalBind :: Eq a => a -> WithScopes a (Tagged a)
-globalBind val = get >>= go
+globalBind value = get >>= go
   where go (Scopes lastTag []) = go $ Scopes lastTag [[]]
         go state@(Scopes lastTag scopes)
-          | isJust (getTag val state) = return $ Tagged (fromJust $ getTag val state) val
+          | isJust (getTag value state) = return $ Tagged (fromJust $ getTag value state) value
           | otherwise                 = binding <$ put updatedScopes <* increment
-          where updatedScopes = Scopes lastTag $ init scopes ++ [(val, lastTag) : last scopes]
-                binding = Tagged lastTag val
+          where updatedScopes = Scopes lastTag $ init scopes ++ [(value, lastTag) : last scopes]
+                binding = Tagged lastTag value
 
 tagVal :: Eq a => a -> WithScopes a (Tagged a)
-tagVal val = getTag val <$> get >>= maybe (globalBind val) (return . (`Tagged` val)) 
+tagVal value = getTag value <$> get >>= maybe (globalBind value) (return . (`Tagged` value)) 
                 
 tag :: (Scopable a, Eq a) => AST a -> AST (Tagged a)
-tag val = fst . runState (go val) $ Scopes 0 [[]] 
-  where go ast@(Node value children)
-          | newEnv value = pushScope *> taggedNode <* popScope
+tag value = fst . runState (go value) $ Scopes 0 [[]] 
+  where go ast@(Node v children)
+          | newEnv v = pushScope *> taggedNode <* popScope
           | otherwise    = taggedNode
           where taggedNode  = newBindings *> (Node <$> currTag <*> mapM go children)
                 newBindings = mapM_ bind (bindings ast) >> mapM_ globalBind (globalBindings ast)
-                currTag | bound value = tagVal value
-                        | otherwise   = get >>= \ (Scopes lastTag _) -> Tagged lastTag value <$ increment
+                currTag | bound v = tagVal v
+                        | otherwise   = get >>= \ (Scopes lastTag _) -> Tagged lastTag v <$ increment

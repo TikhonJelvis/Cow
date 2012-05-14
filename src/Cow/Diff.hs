@@ -25,9 +25,9 @@ diffForest (l@(Node lRoot lChildren):ls) (r@(Node rRoot rChildren):rs) =
         rest                     = diffForest ls rs
             
 weighDiff :: Double -> Diff a -> Double
-weighDiff α (Node (Ins a) _)    = α
-weighDiff α (Node (Del a) _)    = α
-weighDiff α (Node val children) = weight val + α * (sum $ weighDiff α <$> children)
+weighDiff α (Node (Ins _) _)    = α
+weighDiff α (Node (Del _) _)    = α
+weighDiff α (Node value children) = weight value + α * (sum $ weighDiff α <$> children)
   where weight Non{} = 0
         weight Mod{} = 0.1 * α
         weight _     = α

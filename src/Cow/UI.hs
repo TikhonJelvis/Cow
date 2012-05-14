@@ -15,17 +15,17 @@ indent :: String -> String
 indent = ("&nbsp;&nbsp;" ++)
 
 instance Display JS.Value where
-  displayChildren Root program      = intercalate "<br /><br />" program
+  displayChildren Root code           = intercalate "<br /><br />" code
   displayChildren (Operator o) [l, r] = l ++ " <span class=\"operator\">" ++ o ++ "</span> " ++ r
-  displayChildren Call vs           = intercalate "" vs
-  displayChildren Array vs          = "[" ++ intercalate ", " vs ++ "]"
-  displayChildren Object vs         = "{ <div class=\"block\">" ++ intercalate ",<br />" vs ++ "</div>}"
-  displayChildren Init sts          = "("  ++ intercalate "; " sts ++ ")"
-  displayChildren Args args         = "("  ++ intercalate ", " args ++ ")"
-  displayChildren Block sts         = "{ <div class=\"block\">" ++ intercalate "<br />" sts ++ "</div>}"
-  displayChildren Parameters ps     = displayChildren Args ps
-  displayChildren Assign ls         = displayChildren (Operator "=") ls
-  displayChildren _ children        = intercalate " " children
+  displayChildren Call vs             = intercalate "" vs
+  displayChildren Array vs            = "[" ++ intercalate ", " vs ++ "]"
+  displayChildren Object vs           = "{ <div class=\"block\">" ++ intercalate ",<br />" vs ++ "</div>}"
+  displayChildren Init sts            = "("  ++ intercalate "; " sts ++ ")"
+  displayChildren Args args           = "("  ++ intercalate ", " args ++ ")"
+  displayChildren Block sts           = "{ <div class=\"block\">" ++ intercalate "<br />" sts ++ "</div>}"
+  displayChildren Parameters ps       = displayChildren Args ps
+  displayChildren Assign ls           = displayChildren (Operator "=") ls
+  displayChildren _ children          = intercalate " " children
 
   displayHead (Var v) = "<span class=\"var\">" ++ v ++ "</span> "
   displayHead (Num n) = "<span class=\"num\">" ++ show n ++ "</span> "

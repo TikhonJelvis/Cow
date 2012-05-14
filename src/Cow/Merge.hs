@@ -16,7 +16,9 @@ resolveConflicts base left right = (resolve <$> diff2, diffLeft, diffRight, diff
         resolve (Ins a)         = NoConflict a
         resolve (Del a)         = NoConflict a
         resolve (Non a)         = NoConflict a
-        resolve (Mod (Non a) b) = NoConflict b
-        resolve (Mod a (Non b)) = NoConflict a
+        resolve (Mod (Non _) a) = NoConflict a
+        resolve (Mod a (Non _)) = NoConflict a
         resolve (Mod a b)       = Conflict a b
+        resolve From{}          = error "You should not use tagDiff to merge right now!"
+        resolve To{}            = error "You should not use tagDiff to merge right now!"
         

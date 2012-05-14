@@ -5,10 +5,8 @@ import Control.DeepSeq
 
 import Data.Algorithm.Munkres (hungarianMethodDouble)
 import Data.Array.Unboxed
-import Data.Either            (either)
 import Data.Function          (on)
 import Data.List              (sortBy)
-import Data.List.Extras.Argmax
 import Data.Maybe             (listToMaybe, mapMaybe, fromJust)
 
 import Cow.Diff
@@ -74,15 +72,14 @@ weight a b = weighDiff 0.1 $ diff a b
 
 number :: AST a -> AST (Int, a)
 number = snd . go 1
-  where go n (Node val [])       = (succ n, Node (n, val) [])
-        go n (Node val children) = (n', Node (n, val) children')
+  where go n (Node value [])       = (succ n, Node (n, value) [])
+        go n (Node value children) = (n', Node (n, value) children')
           where (n', children') = foldl combine (succ n, []) children
-                combine (index, acc) child =
-                  let (index', child') = go index child in (index', acc ++ [child'])
+                combine (i, acc) child =
+                  let (i', child') = go i child in (i', acc ++ [child'])
 
 allPairs :: AST (Int, a) -> AST (Int, a) -> [(AST (Int, a), AST (Int, a))]
-allPairs l@(Node (li, _) lChildren) r@(Node (ri, _) rChildren) =
-  (l, r):(lefts ++ rights ++ rest)
+allPairs l@(Node _ lChildren) r@(Node _ rChildren) = (l, r):(lefts ++ rights ++ rest)
   where lefts  = rChildren >>= allPairs l
         rights = lChildren >>= (`allPairs` r)
         rest   = concat $ allPairs <$> lChildren <*> rChildren
