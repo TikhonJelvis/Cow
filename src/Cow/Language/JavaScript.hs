@@ -3,7 +3,7 @@ module Cow.Language.JavaScript (Value(..), parser, program) where
 import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
 import Control.DeepSeq
 
-import Data.List  (nub)
+import Data.List  (nub, intercalate)
 import Data.Maybe (maybeToList)
 
 import Text.ParserCombinators.Parsec 
