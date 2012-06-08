@@ -4,6 +4,7 @@ import Control.DeepSeq
 
 import Data.Array
 import Data.Functor            ((<$>))
+import Data.List               (foldl')
 import Data.List.Extras.Argmax (argmin)
 
 import Cow.Type

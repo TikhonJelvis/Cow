@@ -14,6 +14,7 @@ import Cow.Type
 
 type Matching a = (AST a, AST a)
 
+
 propagate :: (a -> b) -> Either a a -> Either b b
 propagate fn (Left v) = Left $ fn v
 propagate fn (Right v) = Right $ fn v
