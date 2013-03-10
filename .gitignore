@@ -9,3 +9,4 @@ _region*
 *.aux
 *.log
 .\#*
+cabal-dev
