@@ -1,9 +1,8 @@
 module Cow.Diff (diff, weighDiff) where
 
-import Data.Functor            ((<$>))
-import Data.List.Extras.Argmax (argmin)
+import           Data.Functor ((<$>))
 
-import Cow.Type
+import           Cow.Type
 
 diff :: Eq a => AST a -> AST a -> Diff a
 diff (Node left lchildren) (Node right rchildren)
@@ -23,7 +22,7 @@ diffForest (l@(Node lRoot lChildren):ls) (r@(Node rRoot rChildren):rs) =
                  | otherwise     = Node (Mod lRoot rRoot) childrenDiff : rest
         childrenDiff             = diffForest lChildren rChildren
         rest                     = diffForest ls rs
-            
+
 weighDiff :: Double -> Diff a -> Double
 weighDiff α (Node (Ins _) _)    = α
 weighDiff α (Node (Del _) _)    = α
@@ -31,3 +30,6 @@ weighDiff α (Node value children) = weight value + α * (sum $ weighDiff α <$>
   where weight Non{} = 0
         weight Mod{} = 0.1 * α
         weight _     = α
+
+argmin :: Ord o => (a -> o) -> [a] -> a
+argmin = undefined

@@ -1,10 +1,10 @@
 module Cow.UI where
 
-import Data.Functor ((<$>))
-import Data.List    (intercalate)
+import           Data.Functor            ((<$>))
+import           Data.List               (intercalate)
 
-import Cow.Language.JavaScript as JS
-import Cow.Type
+import           Cow.Language.JavaScript as JS
+import           Cow.Type
 
 class Display a where
   displayChildren :: a -> [String] -> String
@@ -42,7 +42,7 @@ display (Node v children) = displayHead v ++ (displayChildren v $ display <$> ch
 displayTagged :: Display a => AST (Tagged a) -> String
 displayTagged (Node (Tagged t v) children) = "<span class=\"tagged n" ++ show t ++ "\">" ++ displayHead v ++ "</span>" ++ body
   where body = displayChildren v $ displayTagged <$> children
-        
+
 displayDiff :: Display a => AST (Change a) -> String
 displayDiff n = go n
   where body a c = displayChildren a $ displayDiff <$> c
@@ -52,7 +52,7 @@ displayDiff n = go n
         go (Node (Non a) c) = "<span class=\"non\">" ++ displayHead a ++ body a c ++ "</span>"
         go (Node (To t a) c) = "<span class=\"to id" ++ show t ++ "\">" ++ displayHead a ++ body a c ++ "</span>"
         go (Node (From t a) c) = "<span class=\"from id" ++ show t ++ "\">" ++ displayHead a ++ body a c ++ "</span>"
-        
+
 toHTML :: String -> String
 toHTML content = unlines $
                  ["<html>",
@@ -66,5 +66,5 @@ toHTML content = unlines $
                   content,
                   "</body>",
                   "</html>"]
-                            
-                 
+
+

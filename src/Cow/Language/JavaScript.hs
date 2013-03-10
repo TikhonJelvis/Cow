@@ -1,18 +1,19 @@
 module Cow.Language.JavaScript (Value(..), parser, program) where
 
-import Control.Applicative ((<$), (<$>), (<*), (*>), (<*>), liftA2)
-import Control.DeepSeq
+import           Control.Applicative                    (liftA2, (*>), (<$),
+                                                         (<$>), (<*), (<*>))
+import           Control.DeepSeq
 
-import Data.List  (nub)
-import Data.Maybe (maybeToList)
+import           Data.List                              (nub)
+import           Data.Maybe                             (maybeToList)
 
-import Text.ParserCombinators.Parsec 
-import qualified Text.ParserCombinators.Parsec.Token as T
-import qualified Text.ParserCombinators.Parsec.Expr as E
-import Text.ParserCombinators.Parsec.Language (javaStyle)
+import           Text.ParserCombinators.Parsec
+import qualified Text.ParserCombinators.Parsec.Expr     as E
+import           Text.ParserCombinators.Parsec.Language (javaStyle)
+import qualified Text.ParserCombinators.Parsec.Token    as T
 
-import Cow.Scope
-import Cow.Type
+import           Cow.Scope
+import           Cow.Type
 
 data Value = Root
            | Empty
@@ -32,7 +33,7 @@ data Value = Root
            | Parameters
            | Assign
            | Block deriving (Eq)
-                            
+
 instance Show Value where
   show Root         = "\\uppercase{root}"
   show Empty        = "$\\epsilon$"
@@ -66,9 +67,9 @@ instance Scopable Value where
   newEnv Function = True
   newEnv _        = False
 
-  bound Var{} = True 
+  bound Var{} = True
   bound _     = False
-  
+
 getBindings :: AST Value -> [Value]
 getBindings (Node Assign (v:_))         = [val v]
 getBindings (Node Parameters vs)        = val <$> vs
@@ -83,14 +84,14 @@ terminator :: Parser ()
 terminator = optional (oneOf ";\n") <|> eof
 
 separators :: Parser ()
-separators = skipMany (space <|> char ';') 
+separators = skipMany (space <|> char ';')
 
 operators :: [[String]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
              [">>", ">>>", "<<"], ["<", "<=", ">", ">=", "in", "instanceof"],
              ["==", "===", "!=", "!=="], ["&"], ["^"], ["|"], ["&&"], ["||"],
              ["=", "*=", "/=", "%=", "+=", "-=", ">>=", "<<=", "&=", "|=", "^="]]
-            
+
 unaryOperators :: [[String]]
 unaryOperators = [["new"], ["++", "--"], ["+", "-", "~", "!", "typeof", "void", "delete"]]
 
@@ -99,10 +100,10 @@ lexer = T.makeTokenParser $ javaStyle {
   T.reservedOpNames = nub $ concat operators ++ concat unaryOperators ++ ["?", ":"],
   T.reservedNames = ["break", "catch", "const", "continue", "do", "export",
                      "for", "function", "if", "import", "label",
-                     "let", "return", "switch", "throw", "try", 
+                     "let", "return", "switch", "throw", "try",
                      "var", "while", "with", "yield"]
   }
-            
+
 keyword :: String -> Parser Value
 keyword word = Keyword word <$ T.reserved lexer word <?> word
 
@@ -120,13 +121,13 @@ funDef = T.reserved lexer "function" *>
 parameterList :: Parser (AST Value)
 parameterList = Node Parameters . map (leaf . Var) <$> argList
   where argList = T.parens lexer . T.commaSep lexer $ T.identifier lexer
-        
+
 compoundBlock :: String -> Parser (AST Value)
 compoundBlock word = try $ compound <$> keyword word
                                     <*> initExp
                                     <*> optBlock
   where compound key initVal body = Node key [initVal, body]
- 
+
 initExp :: Parser (AST Value)
 initExp = Node Init <$> T.parens lexer (return <$> expression)
 
@@ -135,7 +136,7 @@ wordBlock word = Node <$> try (keyword word) <*> (return <$> optBlock)
 
 block :: Parser (AST Value)
 block = Node Block <$> T.braces lexer program <?> "block"
-        
+
 optBlock :: Parser (AST Value)
 optBlock = block <|> toBlock <$> statement
   where toBlock n = Node Block [n]
@@ -156,7 +157,7 @@ compoundBlocks = choice $ try . compoundBlock <$> ["if", "while", "for", "with"]
 returnStmt :: Parser (AST Value)
 returnStmt = (Node <$> (Keyword "return" <$ T.reserved lexer "return")
                    <*> (maybeToList <$> optionMaybe statement)) <?> "return statement"
-             
+
 forLoop :: Parser (AST Value)
 forLoop = do keyword "for"
              (i, c, a) <- T.parens lexer $ (,,) <$> statement <*> statement <*> statement
@@ -179,18 +180,18 @@ statement = (try ifElse
          <|> try funDef
          <|> terminatedStatement
          <|> block) <?> "statement"
-         
+
 var :: Parser (AST Value)
 var = leaf . Var <$> T.identifier lexer <?> "identifier"
 
 str :: Parser (AST Value)
 str = leaf . Str <$> T.stringLiteral lexer <?> "string literal"
-        
+
 varDecl :: Parser (AST Value)
 varDecl = do keyword "var"
              assignments <- T.commaSep1 lexer $ try assignment <|> var
              (return $ Node (Keyword "var") assignments) <?> "variable declaration"
-             
+
 assignment :: Parser (AST Value)
 assignment = Node Assign <$> liftA2 (:) (var <* T.reservedOp lexer "=") (return <$> expression) <?> "assignment"
 
@@ -211,7 +212,7 @@ table = [post "++", post "--"]  :
 
 expression :: Parser (AST Value)
 expression = E.buildExpressionParser table atom <?> "expression"
-                  
+
 arguments :: Parser [AST Value]
 arguments =  [] <$ try (T.parens lexer ε)
          <|> T.parens lexer (T.commaSep lexer expression)
@@ -228,8 +229,8 @@ objLit = Node Object <$> properties
         pair name value = Node (Operator ":") [toKey name, value]
         toKey (Node (Var v) []) = Node (Key v) []
         toKey (Node (Str v) []) = Node (Key v) []
-        toKey k                 = k                
-        
+        toKey k                 = k
+
 arrayLit :: Parser (AST Value)
 arrayLit = Node Array <$> vals
   where vals = T.squares lexer $ T.commaSep lexer expression
@@ -244,7 +245,7 @@ simpleAtom =  str
           <|> try objLit
           <|> try arrayLit
           <|> var
-              
+
 atom :: Parser (AST Value)
 atom =  try indexOrCall
     <|> simpleAtom

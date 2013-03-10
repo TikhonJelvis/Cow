@@ -1,19 +1,19 @@
 module Main where
 
-import Control.Applicative ((*>), (<*), (<$>), (<*>))
+import           Control.Applicative           ((*>), (<$>), (<*), (<*>))
 
-import System.Environment  (getArgs)
+import           System.Environment            (getArgs)
 
-import Text.ParserCombinators.Parsec
+import           Text.ParserCombinators.Parsec
 
-import Cow.Diff
-import Cow.Merge
-import Cow.Scope
-import Cow.Substructure
-import Cow.Type
-import Cow.UI
+import           Cow.Diff
+import           Cow.Merge
+import           Cow.Scope
+import           Cow.Substructure
+import           Cow.Type
+import           Cow.UI
 
-import qualified Cow.Language.JavaScript as JS
+import qualified Cow.Language.JavaScript       as JS
 
 toLaTeX' :: Show a => String -> String -> AST a -> IO ()
 toLaTeX' left right result = writeFile "out.ltx" out
@@ -62,15 +62,15 @@ nums = char '[' *> spaces *> (Node <$> value <*> children) <* char ']'
 -- draw inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
 --   Right val -> toLaTeX inp1 inp2 val
 --   Left  err -> putStrLn $ "Error: " ++ show err
-  
+
 testParse :: IO ()
 testParse = parseFromFile JS.program "test.js" >>= toTreeLaTeX
-         
+
 testDiff :: String -> String -> IO ()
 testDiff inp1 inp2 = case diff <$> parse nums "left" inp1 <*> parse nums "right" inp2 of
   Right value -> toLaTeX' inp1 inp2 value
   Left err    -> putStrLn $ "Error: " ++ show err
-  
+
 testJSDiff :: String -> String -> IO ()
 testJSDiff inp1 inp2 = case tagDiff <$> parse JS.parser "left" inp1 <*> parse JS.parser "right" inp2 of
   Right value -> toLaTeX' inp1 inp2 value
@@ -81,7 +81,7 @@ testMerge b l r out = case resolveConflicts <$> get b <*> get l <*> get r of
   Right (value, d1, d2, d3) -> toLaTeX out "" "" "" (show d1) (show d2) (show d3) value
   Left err                  -> print err
   where get a = parse JS.parser "js" a
-        
+
 testFileMerge :: String -> String -> String -> String -> IO ()
 testFileMerge b l r out = do b' <- readFile b
                              l' <- readFile l
@@ -107,7 +107,7 @@ usage = "Moo"
 
 main :: IO ()
 main = do args <- getArgs
-          case args of 
+          case args of
             [] -> putStrLn usage
             ["diff", l, r, out] -> testDisplay l r out
             ["merge", b, l, r, out] -> testFileMerge b l r out

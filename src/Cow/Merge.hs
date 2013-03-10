@@ -1,12 +1,12 @@
 module Cow.Merge where
 
-import Control.DeepSeq
+import           Control.DeepSeq
 
-import Data.Functor ((<$>))
+import           Data.Functor     ((<$>))
 
-import Cow.Diff
-import Cow.Substructure
-import Cow.Type
+import           Cow.Diff
+import           Cow.Substructure
+import           Cow.Type
 
 resolveConflicts :: (NFData a, Eq a) => AST a -> AST a -> AST a -> (Merged a, Diff a, Diff a, Diff (Change a))
 resolveConflicts base left right = (resolve <$> diff2, diffLeft, diffRight, diff2)
@@ -21,4 +21,4 @@ resolveConflicts base left right = (resolve <$> diff2, diffLeft, diffRight, diff
         resolve (Mod a b)       = Conflict a b
         resolve From{}          = error "You should not use tagDiff to merge right now!"
         resolve To{}            = error "You should not use tagDiff to merge right now!"
-        
+

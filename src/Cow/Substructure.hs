@@ -1,16 +1,16 @@
 module Cow.Substructure where
 
-import Control.Applicative    ((<$>), (<*>))
-import Control.DeepSeq
+import           Control.Applicative    ((<$>), (<*>))
+import           Control.DeepSeq
 
-import Data.Algorithm.Munkres (hungarianMethodDouble)
-import Data.Array.Unboxed
-import Data.Function          (on)
-import Data.List              (sortBy)
-import Data.Maybe             (listToMaybe, mapMaybe, fromJust)
+import           Data.Algorithm.Munkres (hungarianMethodDouble)
+import           Data.Array.Unboxed
+import           Data.Function          (on)
+import           Data.List              (sortBy)
+import           Data.Maybe             (fromJust, listToMaybe, mapMaybe)
 
-import Cow.Diff
-import Cow.Type
+import           Cow.Diff
+import           Cow.Type
 
 type Matching a = (AST a, AST a)
 
@@ -23,7 +23,7 @@ tagDiff left right = foldr combine (diff left right) . zip [1..] $ matches
   where matches = sortBy (compare `on` weighMatching) $ match left right
         weighMatching (l, r) = subjectiveWeight $ diff l r
         combine (i, matching) oldTree = tagMatching i matching oldTree
-                                        
+
 tagMatching :: (NFData a, Eq a) => Tag -> Matching a -> Diff a -> Diff a
 tagMatching tagId (removed, added) diffTree
   | otherwise = either id id $ tagRemoved diffTree >>= tagAdded
@@ -31,7 +31,7 @@ tagMatching tagId (removed, added) diffTree
         toFrom x = x
         toTo (Ins a) = (To tagId a)
         toTo x = x
-        tagRemoved deleted@(Node (Del v) children) 
+        tagRemoved deleted@(Node (Del v) children)
           | (Del <$> removed) == deleted = Right . Node (From tagId v) $ map (toFrom <$>) children
         tagRemoved (Node v children) = propagate (Node v) $ combine children (tagRemoved <$> children)
         tagAdded inserted@(Node (Ins v) children)
@@ -46,13 +46,13 @@ tagMatching tagId (removed, added) diffTree
         merge (newChildren, found) (child, Left{}) = (newChildren ++ [child], found)
 
 match :: (NFData a, Eq a) => AST a -> AST a -> [Matching a]
-match left right = map toPair . fst $ hungarianMethodDouble inputArray 
+match left right = map toPair . fst $ hungarianMethodDouble inputArray
   where pairs = allPairs numLeft numRight
         numLeft  = number left
         numRight = number right
         lenLeft  = maximum $ map (fst . val . fst) pairs
         lenRight = maximum $ map (fst . val . snd) pairs
-        getVal (l@(Node (li, _) _), r@(Node (ri, _) _)) = 
+        getVal (l@(Node (li, _) _), r@(Node (ri, _) _)) =
           ((li, ri), weight (snd <$> l) (snd <$> r))
         inputArray = array ((1, 1), (lenLeft, lenRight)) $ getVal <$> pairs
         toPair (li, ri) = (fmap snd . fromJust $ findAST li numLeft,
@@ -83,4 +83,4 @@ allPairs l@(Node _ lChildren) r@(Node _ rChildren) = (l, r):(lefts ++ rights ++ 
   where lefts  = rChildren >>= allPairs l
         rights = lChildren >>= (`allPairs` r)
         rest   = concat $ allPairs <$> lChildren <*> rChildren
-        
+
