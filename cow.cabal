@@ -6,7 +6,7 @@ Name:                cow
 -- The package version. See the Haskell package versioning policy
 -- (http://www.haskell.org/haskellwiki/Package_versioning_policy) for
 -- standards guiding when and how versions should be incremented.
-Version:             0.1
+Version:             0.1.0.1
 
 -- A short (one-line) description of the package.
 Synopsis:            Semantic version control.
@@ -15,7 +15,7 @@ Synopsis:            Semantic version control.
 Description:         An advanced diff and merge tool that parses code files and then compares the resulting ASTs rather than the actual text of the program. It's pretty cool.
 
 -- URL for the project homepage or repository.
-Homepage:            http://inst.eecs.berkeley.edu/~tikhon/cow
+Homepage:            http://jelv.is/cow
 
 -- The license under which the package is released.
 License:             GPL-3
@@ -28,7 +28,7 @@ Author:              Ankur Dave, Tikhon Jelvis
 
 -- An email address to which users can send suggestions, bug reports,
 -- and patches.
-Maintainer:          tikhon@berkeley.edu
+Maintainer:          tikhon@jelv.is
 
 -- A copyright notice.
 -- Copyright:           
