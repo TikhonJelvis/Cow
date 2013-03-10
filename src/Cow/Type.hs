@@ -1,9 +1,9 @@
-module Cow.Type where
-
-import           Control.DeepSeq
+module Cow.Type (AST, Change (..), Conflict (..), Diff, Merged, Tag, Tagged (..), leaf,
+                 module Data.Tree) where
 
 import           Data.Functor    ((<$>))
 import           Data.List       (intercalate)
+import           Data.Tree       (Tree (..))
 
 data Change a = Ins a
               | Del a
@@ -11,6 +11,13 @@ data Change a = Ins a
               | Non a -- No change
               | From Tag a
               | To Tag a deriving (Eq)
+
+type AST a = Tree a
+
+type Diff a = AST (Change a)
+
+leaf :: a -> AST a
+leaf a = Node a []
 
 instance Show a => Show (Change a) where
   show (Ins a)    = "\\Ins{" ++ show a ++ "}"
@@ -30,6 +37,8 @@ instance Functor Tagged where fmap fn (Tagged i a) = Tagged i $ fn a
 
 data Conflict a = Conflict (Change a) (Change a)
                 | NoConflict (Change a) deriving Eq
+
+type Merged a = AST (Conflict a)
 
 instance Show a => Show (Conflict a) where
   show (Conflict a b) = "\\Conflict{" ++ show a ++ "}{" ++ show b ++ "}"

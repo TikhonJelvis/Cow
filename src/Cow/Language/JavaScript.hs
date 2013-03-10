@@ -71,10 +71,10 @@ instance Scopable Value where
   bound _     = False
 
 getBindings :: AST Value -> [Value]
-getBindings (Node Assign (v:_))         = [val v]
-getBindings (Node Parameters vs)        = val <$> vs
+getBindings (Node Assign (v:_))         = [rootLabel v]
+getBindings (Node Parameters vs)        = rootLabel <$> vs
 getBindings (Node v@Var{} [])           = [v]
-getBindings (Node (Operator "=") (v:_)) = [val v]
+getBindings (Node (Operator "=") (v:_)) = [rootLabel v]
 getBindings _                           = []
 
 ε :: Parser String
