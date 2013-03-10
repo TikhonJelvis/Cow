@@ -15,6 +15,10 @@ import           Cow.UI
 
 import qualified Cow.Language.JavaScript       as JS
 
+displayAST :: Show a => AST a -> String
+displayAST (Node value [])       = "[" ++ show value ++ "]"
+displayAST (Node value children) = "[" ++ show value ++ unwords (show <$> children) ++ "]"
+
 toLaTeX' :: Show a => String -> String -> AST a -> IO ()
 toLaTeX' left right result = writeFile "out.ltx" out
   where out = unlines ["\\documentclass[12pt]{article}",
@@ -23,7 +27,7 @@ toLaTeX' left right result = writeFile "out.ltx" out
                        "\\begin{document}",
                        "\\synttree" ++ left,
                        "\\synttree" ++ right ++ "\\\\ \\\\ \\\\ \\\\",
-                       "\\synttree" ++ show result,
+                       "\\synttree" ++ displayAST result,
                        "\\end{document}"]
 
 
@@ -39,7 +43,7 @@ toLaTeX outFile base left right d1 d2 d3 result = writeFile (outFile ++ ".ltx") 
                        "\\synttree" ++ d1,
                        "\\synttree" ++ d2 ++ "\\\\ \\\\ \\\\ \\\\",
                        "\\synttree" ++ d3 ++ "\\\\ \\\\ \\\\ \\\\",
-                       "\\synttree" ++ show result,
+                       "\\synttree" ++ displayAST result,
                        "\\end{document}"]
 
 toTreeLaTeX :: (Show error) => Either error [AST JS.Value] -> IO ()
@@ -50,7 +54,7 @@ toTreeLaTeX inp = case inp of
                             "\\usepackage[margin=1in, paperwidth=100in, textwidth=100in, paperheight=10in]{geometry}",
                             "\\usepackage{change}",
                             "\\begin{document}",
-                            "\\synttree" ++ (show . tag $ Node JS.Root tree),
+                            "\\synttree" ++ (displayAST . tag $ Node JS.Root tree),
                             "\\end{document}"]
 
 nums :: Parser (AST Integer)
@@ -78,7 +82,8 @@ testJSDiff inp1 inp2 = case tagDiff <$> parse JS.parser "left" inp1 <*> parse JS
 
 testMerge :: String -> String -> String -> String -> IO ()
 testMerge b l r out = case resolveConflicts <$> get b <*> get l <*> get r of
-  Right (value, d1, d2, d3) -> toLaTeX out "" "" "" (show d1) (show d2) (show d3) value
+  Right (value, d1, d2, d3) ->
+    toLaTeX out "" "" "" (displayAST d1) (displayAST d2) (displayAST d3) value
   Left err                  -> print err
   where get a = parse JS.parser "js" a
 
@@ -99,7 +104,7 @@ testDisplay lFile rFile out = do l <- parseFromFile JS.parser lFile
                                     "\\usepackage{change}",
                                     "\\usepackage[margin=1in, paperwidth=100in, textwidth=100in, paperheight=10in]{geometry}",
                                     "\\begin{document}",
-                                    "\\synttree" ++ show result,
+                                    "\\synttree" ++ displayAST result,
                                     "\\end{document}"]
 
 usage :: String
@@ -108,7 +113,7 @@ usage = "Moo"
 main :: IO ()
 main = do args <- getArgs
           case args of
-            [] -> putStrLn usage
-            ["diff", l, r, out] -> testDisplay l r out
+            []                      -> putStrLn usage
+            ["diff", l, r, out]     -> testDisplay l r out
             ["merge", b, l, r, out] -> testFileMerge b l r out
-            _ -> putStrLn usage
+            _                       -> putStrLn usage
