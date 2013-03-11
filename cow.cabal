@@ -45,7 +45,7 @@ Build-type:          Simple
 Cabal-version:       >=1.9.2
 
 Library
-  Build-depends:     base, parsec >= 3, list-extras >= 0.4, Diff >= 0.1, mtl >= 2, array >= 0.3, Munkres, deepseq >= 1.1, containers >= 0.4
+  Build-depends:     base, parsec >= 3, Diff >= 0.1, mtl >= 2, array >= 0.3, Munkres, containers >= 0.4
   Hs-source-dirs:    src
   Exposed-modules:   Cow.UI, Cow.Diff, Cow.Scope, Cow.Type, Cow.Merge, Cow.Substructure, Cow.Language.JavaScript
   GHC-options:       -Wall -fno-warn-unused-do-bind -rtsopts -O2

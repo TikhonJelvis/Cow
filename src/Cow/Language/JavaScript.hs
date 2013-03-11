@@ -2,7 +2,6 @@ module Cow.Language.JavaScript (Value(..), parser, program) where
 
 import           Control.Applicative                    (liftA2, (*>), (<$),
                                                          (<$>), (<*), (<*>))
-import           Control.DeepSeq
 
 import           Data.List                              (nub)
 import           Data.Maybe                             (maybeToList)
@@ -53,8 +52,6 @@ instance Show Value where
   show Block        = "\\uppercase{block}"
   show Parameters   = "\\uppercase{parameters}"
   show Assign       = "\\uppercase{assignment}"
-
-instance NFData Value
 
 instance Scopable Value where
   bindings (Node (Keyword "var") children) = children >>= getBindings

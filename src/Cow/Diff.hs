@@ -38,14 +38,16 @@ diffed forest₁ forest₂ = result
           where diffs₁ = findForest start₁ forest₁
                 diffs₂ = findForest start₂ forest₂
 
-        treeLength Node { subForest } = 2 + forestLength subForest
-        forestLength = sum . map treeLength
         findForest index forest = snd $ go (index, forest)
           where go (0, res)  = (0, res)
                 go (n, [])   = (n, [])
                 go (n, Node { subForest } : trees) = case go (n - 1, subForest) of
                   (0, res) -> (0, res)
                   (n', _)  -> go (n' - 1, trees)
+
+treeLength = forestLength . subForest
+forestLength forest = 2 + sum (treeLength <$> forest)
+
 
 -- | Assigns a weight to a potential diff based on how much the
 -- structure of the tree changed.
