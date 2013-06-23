@@ -45,9 +45,11 @@ diffed forest₁ forest₂ = result
                   (0, res) -> (0, res)
                   (n', _)  -> go (n' - 1, trees)
 
+treeLength :: Num n => Tree a -> n
 treeLength = forestLength . subForest
-forestLength forest = 2 + sum (treeLength <$> forest)
 
+forestLength :: Num n => Forest a -> n
+forestLength forest = 2 + sum (treeLength <$> forest)
 
 -- | Assigns a weight to a potential diff based on how much the
 -- structure of the tree changed.
