@@ -1,8 +1,6 @@
 module Cow.Type (AST, Change (..), Conflict (..), Diff, Merged, Tag, Tagged (..), leaf,
                  module Data.Tree) where
 
-import           Data.Functor    ((<$>))
-import           Data.List       (intercalate)
 import           Data.Tree       (Tree (..))
 
 data Change a = Ins a

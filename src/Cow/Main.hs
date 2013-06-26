@@ -108,7 +108,7 @@ testDisplay lFile rFile out = do l <- parseFromFile JS.parser lFile
                                     "\\end{document}"]
 
 usage :: String
-usage = "Moo"
+usage = "Moo..."
 
 main :: IO ()
 main = do args <- getArgs
