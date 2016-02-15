@@ -23,10 +23,18 @@ size :: ParseTree annot leaf -> Int
 size (Node _ children) = 1 + sum (map size children)
 size (Leaf _ _)        = 1
 
+topAnnot :: ParseTree annot leaf -> annot
+topAnnot (Node annot _) = annot
+topAnnot (Leaf annot _) = annot
+
 -- | Replaces all the annotations in a tree with ().
 noAnnot :: ParseTree a leaf -> Parse leaf
 noAnnot (Node _ children) = Node () $ map noAnnot children
 noAnnot (Leaf _ leaf)     = Leaf () leaf
+
+mapAnnot :: (a -> b) -> ParseTree a leaf -> ParseTree b leaf
+mapAnnot f (Node annot children) = Node (f annot) $ mapAnnot f <$> children
+mapAnnot f (Leaf annot leaf)     = Leaf (f annot) leaf
 
 -- | A preorder traversal of a tree, annotating each node with its
 -- position in the traversal, starting with 0.

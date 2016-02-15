@@ -1,23 +1,69 @@
+{-# LANGUAGE PatternGuards #-}
 module Cow.Diff where
 
 import           Data.Array    (Array, (!))
 import qualified Data.Array    as Array
 
-import           Cow.ParseTree (Parse, ParseTree (..))
+import           Cow.ParseTree (Parse, ParseTree (..), NodeType (..))
 import qualified Cow.ParseTree as Tree
+
+type Weight = Double
+
+  -- TODO: Figure out how this function behaves and whether
+  -- exponential actually makes sense!
+-- | Calculate the weight of a tree exponentially discounting each
+-- additional level.
+weigh :: Weight -> Parse leaf -> ParseTree Weight leaf
+weigh α (Leaf _ leaf)     = Leaf α leaf
+weigh α (Node _ children) = Node (sum $ Tree.topAnnot <$> result) result
+  where result = Tree.mapAnnot (α *) . weigh α <$> children
+
+α :: Weight
+α = 0.1
+
+-- | A few arrays representing the structure of a tree for fast
+-- indexing.
+data Tables leaf = Tables {
+  -- | The next non-child node in a preorder traversal.
+  jumps :: Array Int Int,
+  -- | The contents of the node itself, indexed in preorder.
+  nodes :: Array Int (NodeType leaf),
+  -- | The weight of each node—how much removing it should cost.
+  weights :: Array Int Weight
+  }
+
+tables :: Parse leaf -> Tables leaf
+tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
+                     , nodes   = Tree.nodeTable tree
+                     , weights = Tree.preorderTable $ weigh α tree
+                     }
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
-diffTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Int
-diffTable left right = Array.listArray bounds [d i j | (i, j) <- Array.range bounds]
+diffTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Double
+diffTable left right = ds
   where bounds = ((0, 0), (Tree.size left, Tree.size right))
 
-        (jumpsL, jumpsR) = (Tree.jumps left, Tree.jumps right)
-        (nodesL, nodesR) = (Tree.nodeTable left, Tree.nodeTable right)
+        (tableL, tableR) = (tables left, tables right)
 
-        d i 0 = i
-        d 0 j = j
-        d i j = _
+        ds = Array.listArray bounds [d i j | (i, j) <- Array.range bounds]
+
+          -- TODO: Fix the direction indexing is going.
+        d i 0 = fromIntegral i
+        d 0 j = fromIntegral j
+        d i j = case (l, r) of
+          (Leaf' l, Leaf' r) | l == r -> ds ! (i - 1, j - 1)
+          _                           -> minimum $ lefts ++ rights
+          where (l, r) = (nodes tableL ! i, nodes tableR ! j)
+                lefts | Leaf' _ <- l = [ ds ! (i - 1, j) + 1 ]
+                      | Node'   <- l = [ ds ! (i - 1, j)
+                                       , ds ! (jumps tableL ! i, j) + weights tableL ! i
+                                       ]
+                rights | Leaf' _ <- r = [ ds ! (i, j - 1) + 1 ]
+                       | Node'   <- r = [ ds ! (i, j - 1)
+                                        , ds ! (i, jumps tableR ! j) + weights tableR ! j
+                                        ]
+
           -- Idea: Check if leaf or node. For leaves, treat as if
           -- normal string edit distance. For nodes, always try *both*
           -- keeping it unchanged (and stepping into its children) and

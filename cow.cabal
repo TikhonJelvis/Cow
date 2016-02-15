@@ -31,11 +31,11 @@ Library
                    , Cow.Type, Cow.Merge
                    , Cow.Substructure
                    , Cow.Language.JavaScript
-  GHC-options:       -Wall -fno-warn-unused-do-bind -rtsopts -O2
+  GHC-options:       -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind -rtsopts -O2
 
 Executable cow
   Main-is:           src/Cow/Main.hs
   Build-depends:     base
                    , parsec >= 3
                    , cow
-  GHC-options:       -Wall -fno-warn-unused-do-bind -rtsopts -O2
+  GHC-options:       -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind -rtsopts -O2
