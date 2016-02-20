@@ -42,25 +42,27 @@ tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
 -- trees using our modified string edit distance algorithm.
 diffTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Double
 diffTable left right = ds
-  where bounds = ((0, 0), (Tree.size left, Tree.size right))
+  where (endL, endR) = (Tree.size left, Tree.size right)
+        bounds = ((0, 0), (endL, endR))
 
         (tableL, tableR) = (tables left, tables right)
 
         ds = Array.listArray bounds [d i j | (i, j) <- Array.range bounds]
 
-          -- TODO: Fix the direction indexing is going.
-        d i 0 = fromIntegral i
-        d 0 j = fromIntegral j
+
+          -- TODO: Verify your "fixed" indexing actually works!
+        d i j | i == endL = sum [weights tableR ! x | x <- [i..endR]]
+        d i j | j == endR = sum [weights tableL ! x | x <- [j..endL]]
         d i j = case (l, r) of
-          (Leaf' l, Leaf' r) | l == r -> ds ! (i - 1, j - 1)
+          (Leaf' l, Leaf' r) | l == r -> ds ! (i + 1, j + 1)
           _                           -> minimum $ lefts ++ rights
           where (l, r) = (nodes tableL ! i, nodes tableR ! j)
-                lefts | Leaf' _ <- l = [ ds ! (i - 1, j) + 1 ]
-                      | Node'   <- l = [ ds ! (i - 1, j)
+                lefts | Leaf'{} <- l = [ ds ! (i + 1, j) + weights tableL ! i ]
+                      | Node'   <- l = [ ds ! (i + 1, j)
                                        , ds ! (jumps tableL ! i, j) + weights tableL ! i
                                        ]
-                rights | Leaf' _ <- r = [ ds ! (i, j - 1) + 1 ]
-                       | Node'   <- r = [ ds ! (i, j - 1)
+                rights | Leaf'{} <- r = [ ds ! (i, j + 1) + weights tableR ! j]
+                       | Node'   <- r = [ ds ! (i, j + 1)
                                         , ds ! (i, jumps tableR ! j) + weights tableR ! j
                                         ]
 
