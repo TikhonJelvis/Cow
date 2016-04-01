@@ -38,10 +38,16 @@ tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
                      , weights = Tree.preorderTable $ weigh α tree
                      }
 
+-- | Calculate the distance between two trees using our metric.
+dist :: Eq a => Parse a -> Parse a -> Double
+dist left right = ds ! (endL, endR)
+  where ds = distTable left right
+        (endL, endR) = (Tree.size left, Tree.size right)
+
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
-diffTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Double
-diffTable left right = ds
+distTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Double
+distTable left right = ds
   where (endL, endR) = (Tree.size left, Tree.size right)
         bounds = ((0, 0), (endL, endR))
 

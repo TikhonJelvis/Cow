@@ -25,12 +25,9 @@ Library
                    , Munkres
                    , containers >= 0.4
   Hs-source-dirs:    src
-  Exposed-modules:   Cow.UI
-                   , Cow.Diff
-                   , Cow.Scope
-                   , Cow.Type, Cow.Merge
-                   , Cow.Substructure
-                   , Cow.Language.JavaScript
+  Exposed-modules: Cow.Diff
+                 , Cow.ParseTree
+                 , Cow.ParseTree.Debug
   GHC-options:       -rtsopts -O2
 
 Executable cow
