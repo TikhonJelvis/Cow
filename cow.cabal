@@ -22,7 +22,6 @@ Library
                    , parsec >= 3
                    , mtl >= 2
                    , array >= 0.3
-                   , Munkres
                    , containers >= 0.4
   Hs-source-dirs:    src
   Exposed-modules: Cow.Diff

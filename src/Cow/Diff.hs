@@ -19,7 +19,7 @@ weigh α (Node _ children) = Node (sum $ Tree.topAnnot <$> result) result
   where result = Tree.mapAnnot (α *) . weigh α <$> children
 
 α :: Weight
-α = 0.1
+α = 1.1
 
 -- | A few arrays representing the structure of a tree for fast
 -- indexing.
@@ -40,9 +40,8 @@ tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
 
 -- | Calculate the distance between two trees using our metric.
 dist :: Eq a => Parse a -> Parse a -> Double
-dist left right = ds ! (endL, endR)
+dist left right = ds ! (0, 0)
   where ds = distTable left right
-        (endL, endR) = (Tree.size left, Tree.size right)
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
@@ -55,21 +54,20 @@ distTable left right = ds
 
         ds = Array.listArray bounds [d i j | (i, j) <- Array.range bounds]
 
-
-          -- TODO: Verify your "fixed" indexing actually works!
-        d i j | i == endL = sum [weights tableR ! x | x <- [i..endR]]
-        d i j | j == endR = sum [weights tableL ! x | x <- [j..endL]]
+          -- TODO: Fix base cases and verify "fixed" indexing.
+        d i j | i == endL = sum [weights tableR ! x | x <- [i..endR - 1]]
+        d i j | j == endR = sum [weights tableL ! x | x <- [j..endL - 1]]
         d i j = case (l, r) of
           (Leaf' l, Leaf' r) | l == r -> ds ! (i + 1, j + 1)
           _                           -> minimum $ lefts ++ rights
           where (l, r) = (nodes tableL ! i, nodes tableR ! j)
-                lefts | Leaf'{} <- l = [ ds ! (i + 1, j) + weights tableL ! i ]
+                lefts | Leaf'{} <- l = [ ds ! (i + 1, j) + (weights tableL ! i) ]
                       | Node'   <- l = [ ds ! (i + 1, j)
-                                       , ds ! (jumps tableL ! i, j) + weights tableL ! i
+                                       , ds ! (jumps tableL ! i, j) + (weights tableL ! i)
                                        ]
-                rights | Leaf'{} <- r = [ ds ! (i, j + 1) + weights tableR ! j]
+                rights | Leaf'{} <- r = [ ds ! (i, j + 1) + (weights tableR ! j) ]
                        | Node'   <- r = [ ds ! (i, j + 1)
-                                        , ds ! (i, jumps tableR ! j) + weights tableR ! j
+                                        , ds ! (i, jumps tableR ! j) + (weights tableR ! j)
                                         ]
 
           -- Idea: Check if leaf or node. For leaves, treat as if
