@@ -1,4 +1,4 @@
-module Cow.ParseTree.Debug where
+module Cow.ParseTree.Read where
 
 import           Cow.ParseTree
 
