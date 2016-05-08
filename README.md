@@ -18,9 +18,9 @@ The current approach works as a pipeline of several distinct algorithms. Each st
   
   Each language we support will probably need a custom parser, but this makes sense anyhow because the parsing behavior we need for diffing and merging is different from what a compiler requires:
   
-    * We can make distinctions the compiler wouldn't like detecting statements grouped with blank lines.
-    * We want to preserve as much lexical information as possible to recreate the program text—especially for merging.
-    * Controlling how the code is parsed gives us fine control over the resulting diff, letting us selectively ignore things we don't care about. Think of this is a sophisticated, syntax-aware alternative to ignoring whitespace with normal diff.
+  * We can make distinctions the compiler wouldn't like detecting statements grouped with blank lines.
+  * We want to preserve as much lexical information as possible to recreate the program text—especially for merging.
+  * Controlling how the code is parsed gives us fine control over the resulting diff, letting us selectively ignore things we don't care about. Think of this is a sophisticated, syntax-aware alternative to ignoring whitespace with normal diff.
   
   2. **Parse tree diff**: we find a minimal number of additions and deletions to go between two parse trees. The tree structure is used to consolidate multiple changes into one: if you changed most of the lines in a block of code, it's useful to think of that as a single action rather than a bunch of separate actions per line. The threshold for when to consolidate changes is based on a heuristic which will probably have to be tuned per-language.
   
@@ -32,8 +32,8 @@ The current approach works as a pipeline of several distinct algorithms. Each st
   
   It's useful to think of this as a graph problem where each subtree is a node with edges to each other subtree weighted based on some distance between them (perhaps based on the distances calculated in step 2). Given this graph, there are two possible approaches I'm considering:
   
-    * *bipartite graph matching*: the earlier proof of concept found matching substructures by finding the best match between subtrees from the input and output and keeping all the resulting pairs that were close enough in weight. This approach is solid in common cases where you just move a block of code, but doesn't detect more complex transformations like copying a subtree into *two* places in the new tree.
-    * *clustering*: the main alternative I'm considering now is some sort of clustering algorithm that tries to find all the subtrees that are "close enough". This will be able to detect more complex relationships in the code but will likely also depend more on the weights and heuristics used to identify clusters.
+  * *bipartite graph matching*: the earlier proof of concept found matching substructures by finding the best match between subtrees from the input and output and keeping all the resulting pairs that were close enough in weight. This approach is solid in common cases where you just move a block of code, but doesn't detect more complex transformations like copying a subtree into *two* places in the new tree.
+  * *clustering*: the main alternative I'm considering now is some sort of clustering algorithm that tries to find all the subtrees that are "close enough". This will be able to detect more complex relationships in the code but will likely also depend more on the weights and heuristics used to identify clusters.
     
   4. **Merging**: the final (optional) step is merging and conflict resolution. One of the neat advantages to how the tree diff was designed for step 2 is that the resulting diff is a parse tree itself with some additional annotations. This allows us to find conflicts by doing a diff-of-diffs.
   
