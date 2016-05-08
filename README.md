@@ -16,28 +16,28 @@ The current approach works as a pipeline of several distinct algorithms. Each st
 
   1. **Parsing**: the only language-specific part of the pipeline is producing the parse trees. In this context, a **parse tree** is a slightly lower-level representation than an abstract syntax tree: it's a tree that's only labeled at its leaves, with exactly one leaf node per token. Reading out the leaves in order complete recreates the input stream of tokens.
   
-  Each language we support will probably need a custom parser, but this makes sense anyhow because the parsing behavior we need for diffing and merging is different from what a compiler requires:
+    Each language we support will probably need a custom parser, but this makes sense anyhow because the parsing behavior we need for diffing and merging is different from what a compiler requires:
     * We can make distinctions the compiler wouldn't like detecting statements grouped with blank lines.
     * We want to preserve as much lexical information as possible to recreate the program text—especially for merging.
     * Controlling how the code is parsed gives us fine control over the resulting diff, letting us selectively ignore things we don't care about. Think of this is a sophisticated, syntax-aware alternative to ignoring whitespace with normal diff.
   
   2. **Parse tree diff**: we find a minimal number of additions and deletions to go between two parse trees. The tree structure is used to consolidate multiple changes into one: if you changed most of the lines in a block of code, it's useful to think of that as a single action rather than a bunch of separate actions per line. The threshold for when to consolidate changes is based on a heuristic which will probably have to be tuned per-language.
   
-  This diff is useful on its own to reflect the structure of your code and reduce some of the noise you can get with text-based diff algorithms. However, the main advantage here is for giving the diff some extra structure which can be taken advantage of in analysis passes after the tree diff.
+    This diff is useful on its own to reflect the structure of your code and reduce some of the noise you can get with text-based diff algorithms. However, the main advantage here is for giving the diff some extra structure which can be taken advantage of in analysis passes after the tree diff.
   
-  The current algorithm for calculating the needed changes is a slight modification of the [Wagner-Fischer] algorithm for normal string edit distance. It's based on dynamic programming and runs in O(n²) time and space where n is the total number of nodes in the tree (including internal nodes).
+    The current algorithm for calculating the needed changes is a slight modification of the [Wagner-Fischer] algorithm for normal string edit distance. It's based on dynamic programming and runs in O(n²) time and space where n is the total number of nodes in the tree (including internal nodes).
   
   3. **Substructure detection**: the next step identifies which blocks of code (ie subtrees) correspond between the two trees being compared, with some heuristic for determining when two subtrees are "close enough". This information is used to find blocks of code that were moved and can also be used for additional analysis by a plugin.
   
-  It's useful to think of this as a graph problem where each subtree is a node with edges to each other subtree weighted based on some distance between them (perhaps based on the distances calculated in step 2). Given this graph, there are two possible approaches I'm considering:
+    It's useful to think of this as a graph problem where each subtree is a node with edges to each other subtree weighted based on some distance between them (perhaps based on the distances calculated in step 2). Given this graph, there are two possible approaches I'm considering:
     * *bipartite graph matching*: the earlier proof of concept found matching substructures by finding the best match between subtrees from the input and output and keeping all the resulting pairs that were close enough in weight. This approach is solid in common cases where you just move a block of code, but doesn't detect more complex transformations like copying a subtree into *two* places in the new tree.
     * *clustering*: the main alternative I'm considering now is some sort of clustering algorithm that tries to find all the subtrees that are "close enough". This will be able to detect more complex relationships in the code but will likely also depend more on the weights and heuristics used to identify clusters.
     
   4. **Merging**: the final (optional) step is merging and conflict resolution. One of the neat advantages to how the tree diff was designed for step 2 is that the resulting diff is a parse tree itself with some additional annotations. This allows us to find conflicts by doing a diff-of-diffs.
   
-  Once we have a diff-of-diffs, we should be able to resolve more conflicts than a purely text-based system thanks to the high-level information we derived in the previous steps. For example, we can apply *both* a move *and* a modification to a block even if the changes physically overlap in the text.
+    Once we have a diff-of-diffs, we should be able to resolve more conflicts than a purely text-based system thanks to the high-level information we derived in the previous steps. For example, we can apply *both* a move *and* a modification to a block even if the changes physically overlap in the text.
   
-  This step is the least-developed in the current system. The basic idea worked well in the old proof-of-concept but I've rethought many of the details of the previous steps without revisting merging. I'll put more thought and work towards merging once I get the previous few steps working satisfactorily.
+    This step is the least-developed in the current system. The basic idea worked well in the old proof-of-concept but I've rethought many of the details of the previous steps without revisting merging. I'll put more thought and work towards merging once I get the previous few steps working satisfactorily.
 
 [Wagner-Fischer]: https://en.wikipedia.org/wiki/Wagner%E2%80%93Fischer_algorithm
 
