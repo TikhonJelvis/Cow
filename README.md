@@ -5,6 +5,11 @@ Language specific **semantic version control** tools can provide a high level of
 
 Our tool offers a new middle ground: it takes advantage of the *structure* of the text without being tied to its semantics. By operating on **parse trees**, our algorithms can work for any language that we can parse while still giving more insight than a tool constrained to plain text.
 
+#### footnotes
+¹ Like the rather interesting-looking [SemanticMerge] system.
+
+[SemanticMerge]: https://www.semanticmerge.com/
+
 ## Architecture Overview
 
 The current approach works as a pipeline of several distinct algorithms. Each step will produce an intermediate form with a clear interface, making it easy to plug additional logic in between any two steps.
@@ -36,6 +41,7 @@ The current approach works as a pipeline of several distinct algorithms. Each st
   
   This step is the least-developed in the current system. The basic idea worked well in the old proof-of-concept but I've rethought many of the details of the previous steps without revisting merging. I'll put more thought and work towards merging once I get the previous few steps working satisfactorily.
 
+[Wagner-Fischer]: https://en.wikipedia.org/wiki/Wagner%E2%80%93Fischer_algorithm
 
 ## Progress
 
