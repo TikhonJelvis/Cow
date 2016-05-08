@@ -1,4 +1,6 @@
-# Cow: Semantic Version Control
+# Cow: Structural Version Control
+
+**This project has moved to [GitLab](https://gitlab.com/tikhon/Cow). This repo may out of date.**
 
 Normal diff and merge tools treat programs as plain text. This means they are easily confused by superficial changes to the code.
 
