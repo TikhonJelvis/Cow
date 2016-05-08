@@ -4,8 +4,8 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, array, base, containers, mtl, Munkres, parsec
-      , stdenv
+  f = { mkDerivation, array, base, containers, diagrams-contrib
+      , diagrams-lib, diagrams-svg, mtl, parsec, stdenv
       }:
       mkDerivation {
         pname = "cow";
@@ -14,9 +14,10 @@ let
         isLibrary = true;
         isExecutable = true;
         libraryHaskellDepends = [
-          array base containers mtl Munkres parsec
+          array base containers diagrams-contrib diagrams-lib diagrams-svg
+          mtl parsec
         ];
-        executableHaskellDepends = [ base parsec ];
+        executableHaskellDepends = [ base diagrams-svg parsec ];
         homepage = "http://jelv.is/cow";
         description = "Semantic version control: language-aware diff and merge";
         license = stdenv.lib.licenses.gpl3;

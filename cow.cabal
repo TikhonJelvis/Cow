@@ -18,20 +18,25 @@ Build-type:          Simple
 Cabal-version:       >=1.9.2
 
 Library
-  Build-depends:     base
-                   , parsec >= 3
-                   , mtl >= 2
-                   , array >= 0.3
+  Build-depends:     array >= 0.3
+                   , base
                    , containers >= 0.4
+                   , diagrams-contrib >= 1.3.0.8
+                   , diagrams-lib >= 1.3.0.8
+                   , diagrams-svg >= 1.3.1.10
+                   , mtl >= 2
+                   , parsec >= 3
   Hs-source-dirs:    src
   Exposed-modules: Cow.Diff
                  , Cow.ParseTree
-                 , Cow.ParseTree.Debug
+                 , Cow.ParseTree.Read
+                 , Cow.ParseTree.Viz
   GHC-options:       -rtsopts -O2
 
 Executable cow
   Main-is:           src/Cow/Main.hs
   Build-depends:     base
-                   , parsec >= 3
                    , cow
+                   , diagrams-svg >= 1.3.1.10
+                   , parsec >= 3
   GHC-options:       -rtsopts -O2
