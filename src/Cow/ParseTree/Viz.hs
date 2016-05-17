@@ -1,4 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns        #-}
 module Cow.ParseTree.Viz where
 
 import           Data.Functor                 ((<$>))
@@ -18,11 +21,23 @@ renderNode str = text str <> circle 1 # fc white
 -- | Draws a parse tree, discarding annotations. Internal nodes are
 -- drawn as dots, while leaves have their text on a circle.
 renderParseTree :: ParseTree annot String -> Diagram B
-renderParseTree parseTree = renderTree renderNode (~~) tree
+renderParseTree parseTree = renderTree renderNode curve tree
   where tree = clusterLayoutTree parseTree
 
         renderNode Nothing    = circle 0.2 # fc black
         renderNode (Just str) = text str <> circle 1 # fc white
+
+        -- connects two points with an angle
+        angle (unp2 -> (x1, y1)) (unp2 -> (x2, y2)) =
+          fromVertices [p2 (x2, y2), p2 (x', y'), p2 (x1, y1)]
+          where x' = x2 - 0.5 * (x2 - x1)
+                y' = y1 - 0.4 * (y1 - y2)
+
+        -- connects two points with a Bezier curve
+        curve start@(unp2 -> (x1, y1)) end@(unp2 -> (x2, y2)) =
+          fromLocSegments ([ bezier3 (r2 (0, 0)) (r2 (dx, dy/4)) (r2 (dx, dy))
+                           ] `at` p2 (x1, y1))
+          where (dx, dy) = (x2 - x1, y2 - y1)
 
           -- TODO: abstract over this!
 nodeSpacing :: (Floating n, Ord n) => n
