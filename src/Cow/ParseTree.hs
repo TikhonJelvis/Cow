@@ -6,6 +6,7 @@ import           Control.Monad.State (evalState, get, modify)
 
 import           Data.Array          (Array)
 import qualified Data.Array          as Array
+import qualified Data.Tree           as Rose
 
 -- | A parse tree that carries the parsed tokens in its leaves, along
 -- with arbitrary annotations at each node.
@@ -23,12 +24,27 @@ size :: ParseTree annot leaf -> Int
 size (Node _ children) = 1 + sum (map size children)
 size (Leaf _ _)        = 1
 
+-- | Turns the parse tree into a rose tree, discarding all the
+-- annotations. The internal nodes are labeled with 'Nothing' and the
+-- leaves with 'Just leaf'.
+toRoseTree :: ParseTree annot leaf -> Rose.Tree (Maybe leaf)
+toRoseTree (Node _ children) = Rose.Node Nothing $ map toRoseTree children
+toRoseTree (Leaf _ leaf)     = Rose.Node (Just leaf) []
+
+-- | Turns the parse tree into a rose tree, keeping the annotations as
+-- well as the values at the leaves.
+toRoseTreeAnnot :: ParseTree annot leaf -> Rose.Tree (annot, Maybe leaf)
+toRoseTreeAnnot (Node annot children) =
+  Rose.Node (annot, Nothing) $ map toRoseTreeAnnot children
+toRoseTreeAnnot (Leaf annot leaf)     = Rose.Node (annot, Just leaf) []
+
+-- | Gets the annotation for the top-level node in the tree.
 topAnnot :: ParseTree annot leaf -> annot
 topAnnot (Node annot _) = annot
 topAnnot (Leaf annot _) = annot
 
 -- | Replaces all the annotations in a tree with ().
-noAnnot :: ParseTree a leaf -> Parse leaf
+noAnnot :: ParseTree annot leaf -> Parse leaf
 noAnnot (Node _ children) = Node () $ map noAnnot children
 noAnnot (Leaf _ leaf)     = Leaf () leaf
 
