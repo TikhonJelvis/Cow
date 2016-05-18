@@ -87,7 +87,7 @@ clusterLayoutTree = fmap swap . toRoseTreeAnnot . mapAnnot toP2 . nodeX . nodeY
         toP2 (width, (depth, _)) = p2 (width, depth)
 
 exampleTree :: ParseTree () String
-exampleTree = show <$> readTree' "[[1][2[3 4]][5[6[7 8 9][10 11]][12]]]"
+exampleTree = show <$> readTree' "[[1][2[3 4]][5[12][6[7 8 9][10 11 13 14 15]]]]"
 
 exampleTreeDiagram :: Diagram B
-exampleTreeDiagram = renderParseTree exampleTree <> square 50 # fc white
+exampleTreeDiagram = renderParseTree exampleTree # bg white
