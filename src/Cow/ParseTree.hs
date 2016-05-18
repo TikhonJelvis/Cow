@@ -6,6 +6,8 @@ import           Control.Monad.State (evalState, get, modify)
 
 import           Data.Array          (Array)
 import qualified Data.Array          as Array
+import           Data.Foldable
+import           Data.Traversable
 import qualified Data.Tree           as Rose
 
 import           Control.Lens
@@ -19,6 +21,29 @@ data ParseTree annot leaf = Node annot [ParseTree annot leaf]
 -- | A parse tree where we don't care about the annotations at each
 -- node, only the leaves.
 type Parse leaf = ParseTree () leaf
+
+  -- TODO: This is probably woefully inefficient!
+instance Foldable (ParseTree annot) where
+  foldr f z = foldr f z . toListOf leaves
+
+instance Traversable (ParseTree annot) where
+  traverse = traverseOf leaves
+
+-- | A lens which accesses the top-level annotation of a tree, but not
+-- the annotations of the children of the node (if any).
+topAnnot :: Lens (ParseTree annot leaf) (ParseTree annot leaf) annot annot
+topAnnot f (Leaf annot leaf)     = (\ a -> Leaf a leaf) <$> f annot
+topAnnot f (Node annot children) = (\ a -> Node a children) <$> f annot
+
+-- | A traversal that targets every annotation in the tree.
+annots :: Traversal (ParseTree annot leaf) (ParseTree annot' leaf) annot annot'
+annots f (Leaf annot leaf)     = (\ a -> Leaf a leaf) <$> f annot
+annots f (Node annot children) = Node <$> f annot <*> traverse (annots f) children
+
+-- | A traversal that targets every leaf in order.
+leaves :: Traversal (ParseTree annot leaf) (ParseTree annot leaf') leaf leaf'
+leaves f (Leaf annot leaf)     = Leaf annot <$> f leaf
+leaves f (Node annot children) = Node annot <$> traverse (leaves f) children
 
 -- | The size of the tree, counting *all* of the nodes, not just the
 -- leaves.
@@ -40,23 +65,10 @@ toRoseTreeAnnot (Node annot children) =
   Rose.Node (annot, Nothing) $ map toRoseTreeAnnot children
 toRoseTreeAnnot (Leaf annot leaf)     = Rose.Node (annot, Just leaf) []
 
--- | A lens which accesses the top-level annotation of a tree, but not
--- the annotations of the children of the node (if any).
-topAnnot :: Lens (ParseTree annot leaf) (ParseTree annot leaf) annot annot
-topAnnot f (Leaf annot leaf) = (\ a -> Leaf a leaf) <$> f annot
-topAnnot f (Node annot children) = (\ a -> Node a children) <$> f annot
-
--- | A traversal that targets every annotation in the tree.
-annots :: Traversal (ParseTree annot leaf) (ParseTree annot' leaf) annot annot'
-annots f (Leaf annot leaf) = (\ a -> Leaf a leaf) <$> f annot
-annots f (Node annot children) = Node <$> f annot <*> traverse (annots f) children
-
 -- | A preorder traversal of a tree, annotating each node with its
 -- position in the traversal, starting with 0.
-preorder :: Parse leaf -> ParseTree Int leaf
-preorder tree = evalState (go tree) 0
-  where go (Node () children) = Node <$> get <*> (modify (+ 1) *> mapM go children)
-        go (Leaf () leaf)     = do n <- get; modify (+ 1); return $ Leaf n leaf
+preorder :: ParseTree annot leaf -> ParseTree Int leaf
+preorder = iset (indexing annots) id
 
                                    -- TODO: Is this actually right?
 -- | Compiles the next non-child node for each node in a preorder
