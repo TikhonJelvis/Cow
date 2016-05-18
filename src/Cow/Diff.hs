@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternGuards   #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Cow.Diff where
@@ -30,19 +31,21 @@ weigh α (Node _ children) = Node (sumOf (each . Tree.annots) result) result
 -- indexing.
 data Tables leaf = Tables {
   -- | The next non-child node in a preorder traversal.
-  jumps   :: Array Int Int,
+  _jumps   :: Array Int Int,
   -- | The contents of the node itself, indexed in preorder.
-  nodes   :: Array Int (NodeType leaf),
+  _nodes   :: Array Int (NodeType leaf),
   -- | The weight of each node—how much removing it should cost.
-  weights :: Array Int Weight
+  _weights :: Array Int Weight
   }
+
+makeLenses ''Tables
 
 -- | Given a tree, creates arrays that specify its structure in a way
 -- that's fast to index.
 tables :: Parse leaf -> Tables leaf
-tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
-                     , nodes   = Tree.nodeTable tree
-                     , weights = Tree.preorderTable $ weigh α tree
+tables tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
+                     , _nodes   = Tree.nodeTable tree
+                     , _weights = Tree.preorderTable $ weigh α tree
                      }
 
 -- | Specifies what to do with ranges of nodes in the tree, given as
@@ -53,11 +56,11 @@ tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
 -- removing a node in the output tree.
 data Action = Add Int Int | Remove Int Int deriving (Show, Eq)
 
--- | This data type contains both a numeric distance *and* the edit
--- action it corresponds to.
+-- | This data type contains both a numeric distance *and* a (lazy)
+-- edit script that led to it.
 data Dist = Dist { _dist  :: Double
                  , _edits :: [Action]
-                 }
+                 } deriving (Show, Eq)
 
 makeLenses ''Dist
 
@@ -74,40 +77,41 @@ distTable input output = ds
 
         ds = Array.listArray bounds [d i o | (i, o) <- Array.range bounds]
 
-          -- TODO: Fix base cases and verify "fixed" indexing.
+        -- Traverses the parts of the structure at indices [a-b).
+        between a b = traversed . indices (`elem` [a..b - 1])
+
         d i o | i == endIn && o == endOut = Dist 0 []
         d i o | i == endIn  = Dist weight [Add o (endOut - 1)]
-          where weight = sum [weights tableOut ! x | x <- [o..(endOut - 1)]]
+          where weight = sumOf (weights . between o endOut) tableOut
         d i o | o == endOut = Dist weight [Remove i (endIn - 1)]
-          where weight = sum [weights tableIn ! x | x <- [i..(endIn - 1)]]
+          where weight = sumOf (weights . between i endIn) tableIn
         d i o = case (in_, out) of
           (Leaf' in_, Leaf' out) | in_ == out ->
             ds ! (i + 1, o + 1)
           _                                   ->
             minimumBy (comparing _dist) $ inputs ++ outputs
-          where (in_, out) = (nodes tableIn ! i, nodes tableOut ! o)
+          where (in_, out) = (_nodes tableIn ! i, _nodes tableOut ! o)
                 inputs | Leaf'{} <- in_ =
-                         [ ds ! (i + 1, o) & dist +~ weights tableIn ! i
+                         [ ds ! (i + 1, o) & dist +~ _weights tableIn ! i
                                            & edits %~ (Remove i i :)
                          ]
                        | Node'   <- in_ =
                          [ ds ! (i + 1, o)
-                         , let next = jumps tableIn ! i in
-                           ds ! (next, o) & dist +~ weights tableIn ! i
+                         , let next = _jumps tableIn ! i in
+                           ds ! (next, o) & dist +~ _weights tableIn ! i
                                           & edits %~ (Remove i (next - 1) :)
                          ]
                 outputs | Leaf'{} <- out =
-                          [ ds ! (i, o + 1) & dist +~ weights tableOut ! o
+                          [ ds ! (i, o + 1) & dist +~ _weights tableOut ! o
                                             & edits %~ (Add o o :)
                           ]
                         | Node'   <- out =
                           [ ds ! (i, o + 1)
-                          , let next = jumps tableOut ! o in
-                            ds ! (i, next) & dist +~ weights tableOut ! o
+                          , let next = _jumps tableOut ! o in
+                            ds ! (i, next) & dist +~ _weights tableOut ! o
                                            & edits %~ (Add o (next - 1) :)
                           ]
 
 -- | Calculate the distance between two trees using our metric.
 diff :: Eq a => Parse a -> Parse a -> Dist
-diff left right = ds ! (0, 0)
-  where ds = distTable left right
+diff left right = distTable left right ! (0, 0)
