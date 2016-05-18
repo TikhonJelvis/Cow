@@ -38,10 +38,20 @@ toRoseTreeAnnot (Node annot children) =
   Rose.Node (annot, Nothing) $ map toRoseTreeAnnot children
 toRoseTreeAnnot (Leaf annot leaf)     = Rose.Node (annot, Just leaf) []
 
+  -- TODO: Lensify this?
 -- | Gets the annotation for the top-level node in the tree.
 topAnnot :: ParseTree annot leaf -> annot
 topAnnot (Node annot _) = annot
 topAnnot (Leaf annot _) = annot
+
+-- | Modifies the annotation for the top-level node in the tree.
+modifyTopAnnot :: (annot -> annot) -> ParseTree annot leaf -> ParseTree annot leaf
+modifyTopAnnot f (Node annot children) = Node (f annot) children
+modifyTopAnnot f (Leaf annot leaf)     = Leaf (f annot) leaf
+
+-- | Sets the annotation for the top-level node in the tree.
+setTopAnnot :: annot -> ParseTree annot leaf -> ParseTree annot leaf
+setTopAnnot annot = modifyTopAnnot $ const annot
 
 -- | Replaces all the annotations in a tree with ().
 noAnnot :: ParseTree annot leaf -> Parse leaf
