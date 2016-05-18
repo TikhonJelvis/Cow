@@ -21,9 +21,10 @@ Library
   Build-depends:     array >= 0.3
                    , base
                    , containers >= 0.4
-                   , diagrams-contrib >= 1.3.0.8
-                   , diagrams-lib >= 1.3.0.8
-                   , diagrams-svg >= 1.3.1.10
+                   , diagrams-contrib >= 1.3
+                   , diagrams-lib >= 1.3
+                   , diagrams-svg >= 1.3
+                   , lens >= 4.13
                    , mtl >= 2
                    , parsec >= 3
   Hs-source-dirs:    src
@@ -37,6 +38,7 @@ Executable cow
   Main-is:           src/Cow/Main.hs
   Build-depends:     base
                    , cow
-                   , diagrams-svg >= 1.3.1.10
+                   , diagrams-svg >= 1.3
+                   , lens >= 4.13
                    , parsec >= 3
   GHC-options:       -rtsopts -O2

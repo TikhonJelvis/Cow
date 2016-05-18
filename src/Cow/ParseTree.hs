@@ -8,6 +8,8 @@ import           Data.Array          (Array)
 import qualified Data.Array          as Array
 import qualified Data.Tree           as Rose
 
+import           Control.Lens
+
 -- | A parse tree that carries the parsed tokens in its leaves, along
 -- with arbitrary annotations at each node.
 data ParseTree annot leaf = Node annot [ParseTree annot leaf]
@@ -38,29 +40,16 @@ toRoseTreeAnnot (Node annot children) =
   Rose.Node (annot, Nothing) $ map toRoseTreeAnnot children
 toRoseTreeAnnot (Leaf annot leaf)     = Rose.Node (annot, Just leaf) []
 
-  -- TODO: Lensify this?
--- | Gets the annotation for the top-level node in the tree.
-topAnnot :: ParseTree annot leaf -> annot
-topAnnot (Node annot _) = annot
-topAnnot (Leaf annot _) = annot
+-- | A lens which accesses the top-level annotation of a tree, but not
+-- the annotations of the children of the node (if any).
+topAnnot :: Lens (ParseTree annot leaf) (ParseTree annot leaf) annot annot
+topAnnot f (Leaf annot leaf) = (\ a -> Leaf a leaf) <$> f annot
+topAnnot f (Node annot children) = (\ a -> Node a children) <$> f annot
 
--- | Modifies the annotation for the top-level node in the tree.
-modifyTopAnnot :: (annot -> annot) -> ParseTree annot leaf -> ParseTree annot leaf
-modifyTopAnnot f (Node annot children) = Node (f annot) children
-modifyTopAnnot f (Leaf annot leaf)     = Leaf (f annot) leaf
-
--- | Sets the annotation for the top-level node in the tree.
-setTopAnnot :: annot -> ParseTree annot leaf -> ParseTree annot leaf
-setTopAnnot annot = modifyTopAnnot $ const annot
-
--- | Replaces all the annotations in a tree with ().
-noAnnot :: ParseTree annot leaf -> Parse leaf
-noAnnot (Node _ children) = Node () $ map noAnnot children
-noAnnot (Leaf _ leaf)     = Leaf () leaf
-
-mapAnnot :: (a -> b) -> ParseTree a leaf -> ParseTree b leaf
-mapAnnot f (Node annot children) = Node (f annot) $ mapAnnot f <$> children
-mapAnnot f (Leaf annot leaf)     = Leaf (f annot) leaf
+-- | A traversal that targets every annotation in the tree.
+annots :: Traversal (ParseTree annot leaf) (ParseTree annot' leaf) annot annot'
+annots f (Leaf annot leaf) = (\ a -> Leaf a leaf) <$> f annot
+annots f (Node annot children) = Node <$> f annot <*> traverse (annots f) children
 
 -- | A preorder traversal of a tree, annotating each node with its
 -- position in the traversal, starting with 0.

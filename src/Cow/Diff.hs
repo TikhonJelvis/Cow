@@ -1,10 +1,12 @@
 {-# LANGUAGE PatternGuards #-}
 module Cow.Diff where
 
+import           Control.Lens  (each, sumOf, (*~), (^..))
+
 import           Data.Array    (Array, (!))
 import qualified Data.Array    as Array
 
-import           Cow.ParseTree (Parse, ParseTree (..), NodeType (..))
+import           Cow.ParseTree (NodeType (..), Parse, ParseTree (..))
 import qualified Cow.ParseTree as Tree
 
 type Weight = Double
@@ -15,8 +17,8 @@ type Weight = Double
 -- additional level.
 weigh :: Weight -> Parse leaf -> ParseTree Weight leaf
 weigh α (Leaf _ leaf)     = Leaf α leaf
-weigh α (Node _ children) = Node (sum $ Tree.topAnnot <$> result) result
-  where result = Tree.mapAnnot (α *) . weigh α <$> children
+weigh α (Node _ children) = Node (sumOf (each . Tree.annots) result) result
+  where result = (Tree.annots *~ α) . weigh α <$> children
 
 α :: Weight
 α = 1.1
@@ -25,9 +27,9 @@ weigh α (Node _ children) = Node (sum $ Tree.topAnnot <$> result) result
 -- indexing.
 data Tables leaf = Tables {
   -- | The next non-child node in a preorder traversal.
-  jumps :: Array Int Int,
+  jumps   :: Array Int Int,
   -- | The contents of the node itself, indexed in preorder.
-  nodes :: Array Int (NodeType leaf),
+  nodes   :: Array Int (NodeType leaf),
   -- | The weight of each node—how much removing it should cost.
   weights :: Array Int Weight
   }

@@ -47,7 +47,7 @@ nodeY :: (Floating n, Ord n) => ParseTree annot leaf -> ParseTree (n, annot) lea
 nodeY (Leaf annot leaf)     = Leaf (0, annot) leaf
 nodeY (Node annot children) = Node (maximum depths + nodeSpacing, annot) children'
   where children' = nodeY <$> children
-        depths    = fst . topAnnot <$> children'
+        depths    = children' ^.. each . topAnnot . _1
 
 -- | Calculates the x coordinate for each node in a tree. The leaves
 -- are all evenly arranged at the bottom of the tree, with each
@@ -64,8 +64,8 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
           where offsetChildren = evalState (foldM go [] $ offsetAndCenter <$> children) 0
                 go children' node = do
                   offset <- get
-                  let node' = mapAnnot (\ (n, annot) -> (offset + n, annot)) node
-                  put $ offset + 2 * fst (topAnnot node)
+                  let node' = node & annots . _1 +~ offset
+                  put $ offset + 2 * (node ^. topAnnot . _1)
                   return $ node' : children'
 
         -- Calculate how many leaves are under each node (any number
@@ -73,10 +73,10 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
         nodeWidth (Leaf annot leaf)     = Leaf (nodeSpacing, annot) leaf
         nodeWidth (Node annot children) = Node (sum widths, annot) children'
           where children' = nodeWidth <$> children
-                widths    = fst . topAnnot <$> children'
+                widths    = children' ^.. each . topAnnot . _1
 
 clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot leaf -> Rose.Tree (Maybe leaf, P2 n)
-clusterLayoutTree = fmap swap . toRoseTreeAnnot . mapAnnot toP2 . nodeX . nodeY
+clusterLayoutTree = fmap swap . toRoseTreeAnnot . (annots %~ toP2) . nodeX . nodeY
   where swap (a, b) = (b, a)
         toP2 (width, (depth, _)) = p2 (width, depth)
 
