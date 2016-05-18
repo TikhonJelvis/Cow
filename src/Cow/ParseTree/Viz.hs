@@ -5,6 +5,9 @@
 {-# LANGUAGE ViewPatterns              #-}
 module Cow.ParseTree.Viz where
 
+import           Control.Monad                (foldM)
+import           Control.Monad.State          (evalState, get, put)
+
 import           Data.Functor                 ((<$>))
 import           Data.Maybe                   (fromMaybe, listToMaybe)
 import qualified Data.Tree                    as Rose
@@ -58,10 +61,12 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
         offsetAndCenter (Leaf (width, annot) leaf) = Leaf (width / 2, annot) leaf
         offsetAndCenter (Node (width, annot) children) =
           Node (width / 2, annot) $ reverse offsetChildren
-          where offsetChildren = foldl go [] $ offsetAndCenter <$> children
-                go children' node = modifyTopAnnot adjust node : children'
-                  where adjust (n, annot) = (n + prevWidth children', annot)
-                prevWidth = fromMaybe 0 . fmap (fst . topAnnot) . listToMaybe
+          where offsetChildren = evalState (foldM go [] $ offsetAndCenter <$> children) 0
+                go children' node = do
+                  offset <- get
+                  let node' = mapAnnot (\ (n, annot) -> (offset + n, annot)) node
+                  put $ offset + 2 * fst (topAnnot node)
+                  return $ node' : children'
 
         -- Calculate how many leaves are under each node (any number
         -- of levels down). Leaves have a width of 'nodeSpacing'.
