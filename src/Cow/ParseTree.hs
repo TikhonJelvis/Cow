@@ -35,7 +35,7 @@ topAnnot :: Lens (ParseTree annot leaf) (ParseTree annot leaf) annot annot
 topAnnot f (Leaf annot leaf)     = (\ a -> Leaf a leaf) <$> f annot
 topAnnot f (Node annot children) = (\ a -> Node a children) <$> f annot
 
--- | A traversal that targets every annotation in the tree.
+-- | A traversal that targets every annotation in the tree in preorder.
 annots :: Traversal (ParseTree annot leaf) (ParseTree annot' leaf) annot annot'
 annots f (Leaf annot leaf)     = (\ a -> Leaf a leaf) <$> f annot
 annots f (Node annot children) = Node <$> f annot <*> traverse (annots f) children
@@ -82,9 +82,7 @@ jumps tree = go $ preorder tree
 -- | Compiles an array of each annotation in the tree in a preorder
 -- traversal.
 preorderTable :: ParseTree annot leaf -> Array Int annot
-preorderTable tree = Array.listArray (0, size tree - 1) $ go tree
-  where go (Node annot children) = annot : (children >>= go)
-        go (Leaf annot _)        = [annot]
+preorderTable tree = Array.listArray (0, size tree - 1) $ tree ^.. annots
 
 data NodeType leaf = Node' | Leaf' leaf deriving (Show, Eq, Functor)
 
