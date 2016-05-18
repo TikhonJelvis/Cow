@@ -1,10 +1,13 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards   #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Cow.Diff where
 
-import           Control.Lens  (each, sumOf, (*~), (^..))
+import           Control.Lens
 
 import           Data.Array    (Array, (!))
 import qualified Data.Array    as Array
+import           Data.List     (minimumBy)
+import           Data.Ord      (comparing)
 
 import           Cow.ParseTree (NodeType (..), Parse, ParseTree (..))
 import qualified Cow.ParseTree as Tree
@@ -34,64 +37,77 @@ data Tables leaf = Tables {
   weights :: Array Int Weight
   }
 
+-- | Given a tree, creates arrays that specify its structure in a way
+-- that's fast to index.
 tables :: Parse leaf -> Tables leaf
 tables tree = Tables { jumps   = Tree.preorderTable $ Tree.jumps tree
                      , nodes   = Tree.nodeTable tree
                      , weights = Tree.preorderTable $ weigh α tree
                      }
 
--- | Calculate the distance between two trees using our metric.
-dist :: Eq a => Parse a -> Parse a -> Double
-dist left right = ds ! (0, 0)
-  where ds = distTable left right
+-- | Specifies what to do with ranges of nodes in the tree, given as
+-- an inclusive range of indices in preorder.
+--
+-- Note how the problem is *symmetric*: removing corresponds to
+-- removing a node from the input tree and adding corresponds to
+-- removing a node in the output tree.
+data Action = Add Int Int | Remove Int Int deriving (Show, Eq)
+
+-- | This data type contains both a numeric distance *and* the edit
+-- action it corresponds to.
+data Dist = Dist { _dist  :: Double
+                 , _edits :: [Action]
+                 }
+
+makeLenses ''Dist
+
+type DistTable = Array (Int, Int) Dist
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
-distTable :: Eq a => Parse a -> Parse a -> Array (Int, Int) Double
-distTable left right = ds
-  where (endL, endR) = (Tree.size left, Tree.size right)
-        bounds = ((0, 0), (endL, endR))
+distTable :: Eq a => Parse a -> Parse a -> DistTable
+distTable input output = ds
+  where (endIn, endOut) = (Tree.size input, Tree.size output)
+        bounds = ((0, 0), (endIn, endOut))
 
-        (tableL, tableR) = (tables left, tables right)
+        (tableIn, tableOut) = (tables input, tables output)
 
-        ds = Array.listArray bounds [d i j | (i, j) <- Array.range bounds]
+        ds = Array.listArray bounds [d i o | (i, o) <- Array.range bounds]
 
           -- TODO: Fix base cases and verify "fixed" indexing.
-        d i j | i == endL = sum [weights tableR ! x | x <- [i..endR - 1]]
-        d i j | j == endR = sum [weights tableL ! x | x <- [j..endL - 1]]
-        d i j = case (l, r) of
-          (Leaf' l, Leaf' r) | l == r -> ds ! (i + 1, j + 1)
-          _                           -> minimum $ lefts ++ rights
-          where (l, r) = (nodes tableL ! i, nodes tableR ! j)
-                lefts | Leaf'{} <- l = [ ds ! (i + 1, j) + (weights tableL ! i) ]
-                      | Node'   <- l = [ ds ! (i + 1, j)
-                                       , ds ! (jumps tableL ! i, j) + (weights tableL ! i)
-                                       ]
-                rights | Leaf'{} <- r = [ ds ! (i, j + 1) + (weights tableR ! j) ]
-                       | Node'   <- r = [ ds ! (i, j + 1)
-                                        , ds ! (i, jumps tableR ! j) + (weights tableR ! j)
-                                        ]
+        d i o | i == endIn && o == endOut = Dist 0 []
+        d i o | i == endIn  = Dist weight [Add o (endOut - 1)]
+          where weight = sum [weights tableOut ! x | x <- [o..(endOut - 1)]]
+        d i o | o == endOut = Dist weight [Remove i (endIn - 1)]
+          where weight = sum [weights tableIn ! x | x <- [i..(endIn - 1)]]
+        d i o = case (in_, out) of
+          (Leaf' in_, Leaf' out) | in_ == out ->
+            ds ! (i + 1, o + 1)
+          _                                   ->
+            minimumBy (comparing _dist) $ inputs ++ outputs
+          where (in_, out) = (nodes tableIn ! i, nodes tableOut ! o)
+                inputs | Leaf'{} <- in_ =
+                         [ ds ! (i + 1, o) & dist +~ weights tableIn ! i
+                                           & edits %~ (Remove i i :)
+                         ]
+                       | Node'   <- in_ =
+                         [ ds ! (i + 1, o)
+                         , let next = jumps tableIn ! i in
+                           ds ! (next, o) & dist +~ weights tableIn ! i
+                                          & edits %~ (Remove i (next - 1) :)
+                         ]
+                outputs | Leaf'{} <- out =
+                          [ ds ! (i, o + 1) & dist +~ weights tableOut ! o
+                                            & edits %~ (Add o o :)
+                          ]
+                        | Node'   <- out =
+                          [ ds ! (i, o + 1)
+                          , let next = jumps tableOut ! o in
+                            ds ! (i, next) & dist +~ weights tableOut ! o
+                                           & edits %~ (Add o (next - 1) :)
+                          ]
 
-          -- Idea: Check if leaf or node. For leaves, treat as if
-          -- normal string edit distance. For nodes, always try *both*
-          -- keeping it unchanged (and stepping into its children) and
-          -- removing it (and skipping to its next node).
-
-          -- I think that this, combined with a heuristic weight
-          -- function, should get the behavior I need. In particular:
-          --  * if a node is unchanged, the minimum should always end up
-          --    with not deleting it
-          --  * if a node needs to be changed, one of the two cases may be
-          --    the minimum one to choose
-
-          -- TODO: What to do if I'm comparing a node to a leaf? Is
-          -- preorder really a good way to do this? Maybe some sort of
-          -- level-by-level comparison?
-
-          -- Thought: the problem is that the two trees might get
-          -- offset compared to each other in small
-          -- ways.
-
-          -- Counterpoint: doesn't exactly this happen with the normal
-          -- edit distance algorithm if the strings are offset?  Does
-          -- adding an extra dimension change this?
+-- | Calculate the distance between two trees using our metric.
+diff :: Eq a => Parse a -> Parse a -> Dist
+diff left right = ds ! (0, 0)
+  where ds = distTable left right

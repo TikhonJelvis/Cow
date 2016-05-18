@@ -74,7 +74,7 @@ preorder = iset (indexing annots) id
 -- | Compiles the next non-child node for each node in a preorder
 -- traversal. (The next non-child node may not exist, but it will
 -- still be compiled.)
-jumps :: Parse leaf -> ParseTree Int leaf
+jumps :: ParseTree annot leaf -> ParseTree Int leaf
 jumps tree = go $ preorder tree
   where go node@(Node n children) = Node (n + size node) (map go children)
         go (Leaf n leaf)          = Leaf (n + 1) leaf
