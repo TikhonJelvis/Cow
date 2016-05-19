@@ -29,6 +29,7 @@ Library
                    , parsec >= 3
   Hs-source-dirs:    src
   Exposed-modules: Cow.Diff
+                 , Cow.Examples
                  , Cow.ParseTree
                  , Cow.ParseTree.Read
                  , Cow.ParseTree.Viz

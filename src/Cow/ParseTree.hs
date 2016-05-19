@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE LambdaCase    #-}
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE MonadComprehensions #-}
 module Cow.ParseTree where
 
 import           Control.Monad.State (evalState, get, modify)
@@ -7,6 +8,7 @@ import           Control.Monad.State (evalState, get, modify)
 import           Data.Array          (Array)
 import qualified Data.Array          as Array
 import           Data.Foldable
+import           Data.Maybe          (listToMaybe, mapMaybe)
 import           Data.Traversable
 import qualified Data.Tree           as Rose
 
@@ -69,6 +71,20 @@ toRoseTreeAnnot (Leaf annot leaf)     = Rose.Node (annot, Just leaf) []
 -- position in the traversal, starting with 0.
 preorder :: ParseTree annot leaf -> ParseTree Int leaf
 preorder = iset (indexing annots) id
+
+-- | A preorder traversal, keeping the old annotations rather than
+-- replacing them.
+preorder' :: ParseTree annot leaf -> ParseTree (Int, annot) leaf
+preorder' = iover (indexing annots) (,)
+
+-- | Gets the subtree rooted at the given index in a preorder
+-- traversal.
+getSubTree :: Int -> ParseTree annot leaf -> Maybe (ParseTree annot leaf)
+getSubTree n = go . preorder'
+  where go (Leaf (i, annot) leaf) = [Leaf annot leaf | i == n]
+        go (Node (i, annot) children)
+          | i == n    = Just $ Node annot $ children <&> annots %~ snd
+          | otherwise = listToMaybe $ mapMaybe go children
 
                                    -- TODO: Is this actually right?
 -- | Compiles the next non-child node for each node in a preorder

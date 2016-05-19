@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PatternGuards   #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternGuards    #-}
+{-# LANGUAGE TemplateHaskell  #-}
 module Cow.Diff where
 
 import           Control.Lens
@@ -8,6 +8,7 @@ import           Control.Lens
 import           Data.Array    (Array, (!))
 import qualified Data.Array    as Array
 import           Data.List     (minimumBy)
+import           Data.Maybe    (mapMaybe)
 import           Data.Ord      (comparing)
 
 import           Cow.ParseTree (NodeType (..), Parse, ParseTree (..))
@@ -48,18 +49,23 @@ tables tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
                      , _weights = Tree.preorderTable $ weigh α tree
                      }
 
--- | Specifies what to do with ranges of nodes in the tree, given as
--- an inclusive range of indices in preorder.
+-- | Specifies what to do with a preorder index into the tree. If a
+-- subtree is added or removed, all of its children are also added or
+-- removed.
 --
 -- Note how the problem is *symmetric*: removing corresponds to
 -- removing a node from the input tree and adding corresponds to
 -- removing a node in the output tree.
-data Action = Add Int Int | Remove Int Int deriving (Show, Eq)
+data Action = Add Int | Remove Int deriving (Show, Eq)
+
+-- | An edit script is all the actions needed to go from the input
+-- tree to the output tree.
+type Script = [Action]
 
 -- | This data type contains both a numeric distance *and* a (lazy)
 -- edit script that led to it.
 data Dist = Dist { _dist  :: Double
-                 , _edits :: [Action]
+                 , _edits :: Script
                  } deriving (Show, Eq)
 
 makeLenses ''Dist
@@ -81,10 +87,8 @@ distTable input output = ds
         between a b = traversed . indices (`elem` [a..b - 1])
 
         d i o | i == endIn && o == endOut = Dist 0 []
-        d i o | i == endIn  = Dist weight [Add o (endOut - 1)]
-          where weight = sumOf (weights . between o endOut) tableOut
-        d i o | o == endOut = Dist weight [Remove i (endIn - 1)]
-          where weight = sumOf (weights . between i endIn) tableIn
+        d i o | i == endIn  = Dist (sumOf (weights . between o endOut) tableOut) [Add o]
+        d i o | o == endOut = Dist (sumOf (weights . between i endIn) tableIn)   [Remove i]
         d i o = case (in_, out) of
           (Leaf' in_, Leaf' out) | in_ == out ->
             ds ! (i + 1, o + 1)
@@ -93,25 +97,38 @@ distTable input output = ds
           where (in_, out) = (_nodes tableIn ! i, _nodes tableOut ! o)
                 inputs | Leaf'{} <- in_ =
                          [ ds ! (i + 1, o) & dist +~ _weights tableIn ! i
-                                           & edits %~ (Remove i i :)
+                                           & edits %~ (Remove i :)
                          ]
                        | Node'   <- in_ =
                          [ ds ! (i + 1, o)
                          , let next = _jumps tableIn ! i in
                            ds ! (next, o) & dist +~ _weights tableIn ! i
-                                          & edits %~ (Remove i (next - 1) :)
+                                          & edits %~ (Remove i :)
                          ]
                 outputs | Leaf'{} <- out =
                           [ ds ! (i, o + 1) & dist +~ _weights tableOut ! o
-                                            & edits %~ (Add o o :)
+                                            & edits %~ (Add o :)
                           ]
                         | Node'   <- out =
                           [ ds ! (i, o + 1)
                           , let next = _jumps tableOut ! o in
                             ds ! (i, next) & dist +~ _weights tableOut ! o
-                                           & edits %~ (Add o (next - 1) :)
+                                           & edits %~ (Add o :)
                           ]
 
 -- | Calculate the distance between two trees using our metric.
 diff :: Eq a => Parse a -> Parse a -> Dist
 diff left right = distTable left right ! (0, 0)
+
+-- | Annotates a node in a tree with whether it was added, removed or
+-- left unchanged by an edit script.
+data Action' = Add' | Remove' | None' deriving (Show, Eq)
+
+-- | Compares two trees and returns all the added and removed
+-- subtrees.
+toSubTrees :: Eq a => Parse a -> Parse a -> [ParseTree Action' a]
+toSubTrees input output = mapMaybe go actions
+  where actions = diff input output ^. edits
+
+        go (Remove i) = Tree.getSubTree i input  <&> Tree.annots .~ Remove'
+        go (Add o)    = Tree.getSubTree o output <&> Tree.annots .~ Add'
