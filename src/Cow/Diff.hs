@@ -1,32 +1,55 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PatternGuards    #-}
-{-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE PatternGuards       #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 module Cow.Diff where
 
 import           Control.Lens
+import           Control.Monad.State (evalState)
 
-import           Data.Array    (Array, (!))
-import qualified Data.Array    as Array
-import           Data.List     (minimumBy)
-import           Data.Maybe    (mapMaybe)
-import           Data.Ord      (comparing)
+import           Data.Array          (Array, (!))
+import qualified Data.Array          as Array
+import           Data.List           (minimumBy)
+import           Data.Maybe          (mapMaybe)
+import           Data.Ord            (comparing)
 
-import           Cow.ParseTree (NodeType (..), Parse, ParseTree (..))
-import qualified Cow.ParseTree as Tree
+import           Cow.ParseTree       (NodeType (..), Parse, ParseTree (..))
+import qualified Cow.ParseTree       as Tree
 
 type Weight = Double
 
-  -- TODO: Figure out how this function behaves and whether
-  -- exponential actually makes sense!
+-- | A function which assigns every subtree a weight.
+type Weigh leaf = Parse leaf -> ParseTree Weight leaf
+
+  -- TODO: Figure out how this function behaves and whether it
+  -- actually makes any sense!
 -- | Calculate the weight of a tree exponentially discounting each
 -- additional level.
-weigh :: Weight -> Parse leaf -> ParseTree Weight leaf
-weigh α (Leaf _ leaf)     = Leaf α leaf
-weigh α (Node _ children) = Node (sumOf (each . Tree.annots) result) result
-  where result = (Tree.annots *~ α) . weigh α <$> children
+expDiscount :: Weight -> Weigh leaf
+expDiscount α (Leaf _ leaf)     = Leaf 1 leaf
+expDiscount α (Node _ children) = Node (1 + α * sumOf (each . Tree.annots) result) result
+  where result = expDiscount α <$> children
 
-α :: Weight
-α = 1.1
+          -- TODO: Clarify and verify!
+-- | The weight of a node is n% of its possible range.
+--
+-- The minimum weight of a node is the largest(?) weight of any one
+-- child (otherwise we do not get a valid distance metric). The
+-- maximum for the heuristic to be useful is the sum of all its
+-- children.
+--
+-- This heuristic is equal to minimum + n * (maximum - minimum).
+--
+-- Leaves have weight 1 by fiat.
+percentage :: forall leaf. Weight -> Weigh leaf
+percentage n (Leaf _ leaf)     = Leaf 1 leaf
+percentage n (Node _ children) = Node (min + n * (max - min)) children'
+  where -- TODO: make children NonEmpty?
+        Just min = minimumOf (each . Tree.topAnnot) children'
+        max = sumOf (each . Tree.topAnnot) children'
+
+        children' :: [ParseTree Weight leaf]
+        children' = percentage n <$> children
 
 -- | A few arrays representing the structure of a tree for fast
 -- indexing.
@@ -43,11 +66,11 @@ makeLenses ''Tables
 
 -- | Given a tree, creates arrays that specify its structure in a way
 -- that's fast to index.
-tables :: Parse leaf -> Tables leaf
-tables tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
-                     , _nodes   = Tree.nodeTable tree
-                     , _weights = Tree.preorderTable $ weigh α tree
-                     }
+tables :: Weigh leaf -> Parse leaf -> Tables leaf
+tables weigh tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
+                           , _nodes   = Tree.nodeTable tree
+                           , _weights = Tree.preorderTable $ weigh tree
+                           }
 
 -- | Specifies what to do with a preorder index into the tree. If a
 -- subtree is added or removed, all of its children are also added or
@@ -56,7 +79,12 @@ tables tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
 -- Note how the problem is *symmetric*: removing corresponds to
 -- removing a node from the input tree and adding corresponds to
 -- removing a node in the output tree.
-data Action = Add Int | Remove Int deriving (Show, Eq)
+data Action = Add    { _loc :: Int }
+            | Remove { _loc :: Int } deriving (Show, Eq)
+
+makeLenses ''Action
+
+makePrisms ''Action
 
 -- | An edit script is all the actions needed to go from the input
 -- tree to the output tree.
@@ -74,12 +102,12 @@ type DistTable = Array (Int, Int) Dist
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
-distTable :: Eq a => Parse a -> Parse a -> DistTable
-distTable input output = ds
+distTable :: Eq a => (Parse a -> ParseTree Weight a) -> Parse a -> Parse a -> DistTable
+distTable weigh input output = ds
   where (endIn, endOut) = (Tree.size input, Tree.size output)
         bounds = ((0, 0), (endIn, endOut))
 
-        (tableIn, tableOut) = (tables input, tables output)
+        (tableIn, tableOut) = (tables weigh input, tables weigh output)
 
         ds = Array.listArray bounds [d i o | (i, o) <- Array.range bounds]
 
@@ -117,8 +145,8 @@ distTable input output = ds
                           ]
 
 -- | Calculate the distance between two trees using our metric.
-diff :: Eq a => Parse a -> Parse a -> Dist
-diff left right = distTable left right ! (0, 0)
+diff :: Eq a => Weigh a -> Parse a -> Parse a -> Dist
+diff weigh left right = distTable weigh left right ! (0, 0)
 
 -- | Annotates a node in a tree with whether it was added, removed or
 -- left unchanged by an edit script.
@@ -126,9 +154,26 @@ data Action' = Add' | Remove' | None' deriving (Show, Eq)
 
 -- | Compares two trees and returns all the added and removed
 -- subtrees.
-toSubTrees :: Eq a => Parse a -> Parse a -> [ParseTree Action' a]
-toSubTrees input output = mapMaybe go actions
-  where actions = diff input output ^. edits
+toSubTrees :: Eq a => Weigh a -> Parse a -> Parse a -> [ParseTree Action' a]
+toSubTrees weigh input output = mapMaybe go actions
+  where actions = diff weigh input output ^. edits
 
         go (Remove i) = Tree.getSubTree i input  <&> Tree.annots .~ Remove'
         go (Add o)    = Tree.getSubTree o output <&> Tree.annots .~ Add'
+
+annotateTrees :: forall a. Eq a => Weigh a -> Parse a -> Parse a ->
+                 (ParseTree Action' a, ParseTree Action' a)
+annotateTrees weigh input output = (input', output')
+  where input'  = go Remove' removed $ Tree.preorder input
+        output' = go Add' added $ Tree.preorder output
+
+        go to targets (Leaf n leaf)
+          | n `elem` targets = Leaf to leaf
+          | otherwise        = Leaf None' leaf
+        go to targets node@(Node n children)
+          | n `elem` targets = node & Tree.annots .~ to
+          | otherwise        = Node None' $ go to targets <$> children
+
+        actions = diff weigh input output ^. edits
+        removed = actions ^.. each . _Remove
+        added   = actions ^.. each . _Add

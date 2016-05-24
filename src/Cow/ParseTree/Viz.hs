@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE ViewPatterns              #-}
@@ -16,17 +17,15 @@ import           Diagrams.Backend.SVG.CmdLine
 import           Diagrams.Prelude
 import           Diagrams.TwoD.Layout.Tree
 
+import           Cow.Diff
 import           Cow.ParseTree
 import           Cow.ParseTree.Read
 
--- | Draws a parse tree, discarding annotations. Internal nodes are
--- drawn as dots, while leaves have their text on a circle.
-renderParseTree parseTree = renderTree renderNode curve tree
+-- | Render a tree with functions to control edge colors (based on the
+-- the nodes they're connecting) and node shapes.
+renderAnnotTree edgeColor renderNode parseTree = renderTree' renderNode renderEdge tree
   where tree = clusterLayoutTree parseTree
-
-        -- Render leaves as white circles and nodes as black dots
-        renderNode Nothing    = circle 0.2 # fc black
-        renderNode (Just str) = text str <> circle 1 # fc white
+        renderEdge (annot1, p1) (annot2, p2) = curve p1 p2 # lc (edgeColor annot1 annot2)
 
         -- Connects nodes with a Bézier curve to help avoid
         -- overlapping edges and make connections easy to follow
@@ -36,6 +35,24 @@ renderParseTree parseTree = renderTree renderNode curve tree
                                       (r2 (dx, dy))
                             ] `at` p2 (x1, y1)
           where (dx, dy) = (x2 - x1, y2 - y1)
+
+-- | Renders trees annotated with add/remove/unchanged actions. If an
+-- internal is added or removed, all its children and edges are
+-- colored.
+renderDiffTree = renderAnnotTree edgeColor $ \case
+  (action, Nothing)  -> circle 0.5 # fc (colorOf action)
+  (action, Just str) -> text str <> circle 1 # fc white # lc (colorOf action)
+  where colorOf Add'    = green
+        colorOf Remove' = red
+        colorOf None'   = black
+
+        edgeColor (action, _)   _  = colorOf action
+
+-- | Renders a parse tree ignoring its annotations.
+renderParseTree = renderAnnotTree (\ a b -> black) renderNode
+  where -- Render leaves as white circles and nodes as black dots
+        renderNode (_, Nothing) = circle 0.2 # fc black
+        renderNode (_, Just str) = text str <> circle 1 # fc white
 
           -- TODO: abstract over this!
 nodeSpacing :: (Floating n, Ord n) => n
@@ -75,10 +92,12 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
           where children' = nodeWidth <$> children
                 widths    = children' ^.. each . topAnnot . _1
 
-clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot leaf -> Rose.Tree (Maybe leaf, P2 n)
-clusterLayoutTree = fmap swap . toRoseTreeAnnot . (annots %~ toP2) . nodeX . nodeY
-  where swap (a, b) = (b, a)
-        toP2 (width, (depth, _)) = p2 (width, depth)
+-- | Lays a whole tree out with everything aligned from the leaves up.
+clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot leaf ->
+                                            Rose.Tree ((annot, Maybe leaf), P2 n)
+clusterLayoutTree = fmap go . toRoseTreeAnnot . (annots %~ toP2) . nodeX . nodeY
+  where go ((pos, annot), leaf) = ((annot, leaf), pos)
+        toP2 (width, (depth, annot)) = (p2 (width, depth), annot)
 
 exampleTree :: ParseTree () String
 exampleTree = show <$> readTree' "[[1][2[3 4]][5[6][7[[8 9 10 11 12]][13 14 15]]]]"
