@@ -27,6 +27,7 @@ Library
                    , lens >= 4.13
                    , mtl >= 2
                    , parsec >= 3
+                   , text >= 1.2
   Hs-source-dirs:    src
   Exposed-modules: Cow.Diff
                  , Cow.Examples
@@ -42,4 +43,5 @@ Executable cow
                    , diagrams-svg >= 1.3
                    , lens >= 4.13
                    , parsec >= 3
+                   , text >= 1.2
   GHC-options:       -rtsopts -O2
