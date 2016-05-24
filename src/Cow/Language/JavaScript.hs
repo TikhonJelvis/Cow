@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE MonadComprehensions #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE TemplateHaskell     #-}
 -- | A basic JavaScript parser that produces a ParseTree with Token
 -- values as leaves. The Token values keep track of whitespace
 -- consumed during lexing which can be accessed to accurately print
@@ -13,6 +14,7 @@ module Cow.Language.JavaScript where
 import           Control.Lens
 
 import qualified Data.Char        as Char
+import           Data.Maybe       (fromMaybe, listToMaybe)
 import           Data.Monoid
 import           Data.Text        (Text)
 import qualified Data.Text        as Text
@@ -20,6 +22,8 @@ import           Data.Text.Lens
 
 import           Text.Parsec
 import           Text.Parsec.Text
+
+import           Numeric          (readDec, readHex, readInt, readOct)
 
 import           Cow.ParseTree
 
@@ -171,13 +175,37 @@ stringLiteral = tokenize (String <$> contents)
         strChar start = satisfy (`notElem` [start, '\\']) <|> escape <?> "string character"
 
         escape = char '\\' *> (escapeChar <|> unicodeEscape)
-        escapeChar = escaped <$> oneOf "0btnvfr'\"\\\n"
+        escapeChar = escaped <$> oneOf "0btnvfr'\"\\\n" <?> "escape character"
         escaped c = let Just res = lookup c escapes in res
         escapes = [('b', '\b'), ('t', '\t'), ('n', '\n'), ('v', '\v'), ('0', '\0'),
                    ('f', '\f'), ('r', '\r'), ('\'', '\''), ('\\', '\\')]
 
         -- parses \uXXXX and \u{X} … \u{XXXXXX} as Unicode characters
-        unicodeEscape = char 'u' *> (fourDigit <|> other)
+        unicodeEscape = char 'u' *> (fourDigit <|> other) <?> "unicode escape sequence"
           where toChar = Char.chr . read . ("0x" ++)
                 fourDigit = toChar <$> count 4 hexDigit
                 other = toChar <$> between (char '{') (char '}') (many1 hexDigit)
+
+                -- TODO: Handle malformed literals like 0923, 0b1233, -0x1.2
+number :: Parser Token
+number = tokenize $ Num <$> (try floatLit <|> intLit)
+  where intLit = do sign   <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
+                    format <- optionMaybe parseFormat
+                    num    <- many1 digit
+                    return . sign . toFormat format $ num
+        parseFormat = choice $ try . string <$> ["0x", "0X", "0b", "0B", "0"]
+        toFormat format = fromMaybe read $ do format' <- format
+                                              reader  <- lookup format' formats
+                                              return $ toReader reader
+        toReader f = fst . head . f
+        formats = [("0", readOct), ("0x", readHex), ("0X", readHex),
+                   ("0b", readBinary), ("0B", readBinary)]
+        readBinary = readInt 0 (`elem` ['0','1']) (read . (:[]))
+
+        floatLit = do sign <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
+                      num  <- try $ many1 digit
+                      dec  <- optionMaybe $ char '.' *> many1 digit
+                      exp  <- optionMaybe $ oneOf "eE" *> many1 digit
+                      let dec' = fromMaybe "" $ ("." ++) <$> dec
+                          exp' = fromMaybe "" $ ("e" ++) <$> exp
+                      return . sign . read $ num <> dec' <> exp'
