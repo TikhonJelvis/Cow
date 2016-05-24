@@ -12,6 +12,7 @@ module Cow.Language.JavaScript where
 
 import           Control.Lens
 
+import qualified Data.Char        as Char
 import           Data.Monoid
 import           Data.Text        (Text)
 import qualified Data.Text        as Text
@@ -19,6 +20,8 @@ import           Data.Text.Lens
 
 import           Text.Parsec
 import           Text.Parsec.Text
+
+import           Cow.ParseTree
 
 -- * Tokens
 
@@ -37,7 +40,7 @@ instance Show Name where show n = n ^. name . _Text
 -- some of these requires actual parsing.
 data Value = Var Name
            | Num Double
-           | Str Text
+           | String Text
            | Regex Text         -- TODO: better type for regex?
 
              -- TODO: Exauhstive types for operators and keywords?
@@ -95,6 +98,8 @@ makeLenses ''Token
 instance Eq Token where
   t1 == t2 = t1 ^. value == t2 ^. value
 
+instance Show Token where show = show . _value
+
 -- * Parsing functions:
 
 -- | Converts a parser that doesn't care about whitespace into one
@@ -136,7 +141,7 @@ keywords = ["break", "catch", "const", "continue", "do", "export",
 
 -- | A character that makes up a valid JavaScript identifier.
 --
--- This might not be entirely complete with more obscure valid Unicode
+-- This might not be entirely complete with obscure but valid Unicode
 -- characters like zero-width joiners.
 idChar :: Parser Char
 idChar = alphaNum <|> oneOf "$_"
@@ -147,3 +152,32 @@ keyword keyword = tokenize $ Keyword keyword <$ parseKeyword
   where parseKeyword =
           do literal keyword
              notFollowedBy idChar <?> ("end of " <> Text.unpack keyword)
+
+-- | Parses a valid name which can start with a letter/$/_ followed by
+-- any number of letters/numbers/$/_.
+identifier :: Parser Name
+identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
+  where startChar = letter <|> oneOf "$_"
+        rest = Text.pack <$> many idChar
+
+-- | Parses JavaScript string literals, including both normal escapes
+-- and Unicode (both '\uXXXX' and '\u{XXXXXX}' formats).
+stringLiteral :: Parser Token
+stringLiteral = tokenize (String <$> contents)
+  where contents = do start <- oneOf "'\""
+                      contents <- many $ strChar start
+                      char start <?> "end of string"
+                      return $ Text.pack contents
+        strChar start = satisfy (`notElem` [start, '\\']) <|> escape <?> "string character"
+
+        escape = char '\\' *> (escapeChar <|> unicodeEscape)
+        escapeChar = escaped <$> oneOf "0btnvfr'\"\\\n"
+        escaped c = let Just res = lookup c escapes in res
+        escapes = [('b', '\b'), ('t', '\t'), ('n', '\n'), ('v', '\v'), ('0', '\0'),
+                   ('f', '\f'), ('r', '\r'), ('\'', '\''), ('\\', '\\')]
+
+        -- parses \uXXXX and \u{X} … \u{XXXXXX} as Unicode characters
+        unicodeEscape = char 'u' *> (fourDigit <|> other)
+          where toChar = Char.chr . read . ("0x" ++)
+                fourDigit = toChar <$> count 4 hexDigit
+                other = toChar <$> between (char '{') (char '}') (many1 hexDigit)
