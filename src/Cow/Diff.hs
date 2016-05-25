@@ -118,26 +118,26 @@ distTable weigh input output = ds
         d i o | i == endIn  = Dist (sumOf (weights . between o endOut) tableOut) [Add o]
         d i o | o == endOut = Dist (sumOf (weights . between i endIn) tableIn)   [Remove i]
         d i o = case (in_, out) of
-          (Leaf' in_, Leaf' out) | in_ == out ->
+          (TypeLeaf in_, TypeLeaf out) | in_ == out ->
             ds ! (i + 1, o + 1)
           _                                   ->
             minimumBy (comparing _dist) $ inputs ++ outputs
           where (in_, out) = (_nodes tableIn ! i, _nodes tableOut ! o)
-                inputs | Leaf'{} <- in_ =
+                inputs | TypeLeaf{} <- in_ =
                          [ ds ! (i + 1, o) & dist +~ _weights tableIn ! i
                                            & edits %~ (Remove i :)
                          ]
-                       | Node'   <- in_ =
+                       | TypeNode   <- in_ =
                          [ ds ! (i + 1, o)
                          , let next = _jumps tableIn ! i in
                            ds ! (next, o) & dist +~ _weights tableIn ! i
                                           & edits %~ (Remove i :)
                          ]
-                outputs | Leaf'{} <- out =
+                outputs | TypeLeaf{} <- out =
                           [ ds ! (i, o + 1) & dist +~ _weights tableOut ! o
                                             & edits %~ (Add o :)
                           ]
-                        | Node'   <- out =
+                        | TypeNode   <- out =
                           [ ds ! (i, o + 1)
                           , let next = _jumps tableOut ! o in
                             ds ! (i, next) & dist +~ _weights tableOut ! o

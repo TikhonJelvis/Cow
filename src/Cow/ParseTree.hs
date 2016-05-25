@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor       #-}
@@ -26,6 +27,10 @@ data ParseTree annot leaf = Node annot [ParseTree annot leaf]
 -- | A parse tree where we don't care about the annotations at each
 -- node, only the leaves.
 type Parse leaf = ParseTree () leaf
+
+pattern Node' children = Node () children
+
+pattern Leaf' leaf = Leaf () leaf
 
   -- TODO: This is probably woefully inefficient!
 instance Foldable (ParseTree annot) where
@@ -103,12 +108,12 @@ jumps tree = go $ preorder tree
 preorderTable :: ParseTree annot leaf -> Array Int annot
 preorderTable tree = Array.listArray (0, size tree - 1) $ tree ^.. annots
 
-data NodeType leaf = Node' | Leaf' leaf deriving (Show, Eq, Functor)
+data NodeType leaf = TypeNode | TypeLeaf leaf deriving (Show, Eq, Functor)
 
 -- | Takes a preorder traversal of a tree and turns it into an array
 -- which specifies whether each node was a node or a leaf (with its
 -- contents).
 nodeTable :: Parse leaf -> Array Int (NodeType leaf)
 nodeTable tree = Array.listArray (0, size tree - 1) $ go tree
-  where go (Node _ children) = Node' : (children >>= go)
-        go (Leaf _ leaf)     = [Leaf' leaf]
+  where go (Node _ children) = TypeNode : (children >>= go)
+        go (Leaf _ leaf)     = [TypeLeaf leaf]

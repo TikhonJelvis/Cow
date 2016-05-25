@@ -12,15 +12,17 @@
 module Cow.Language.JavaScript where
 
 import           Control.Lens
+import           Control.Monad    (join)
 
 import qualified Data.Char        as Char
-import           Data.Maybe       (fromMaybe, listToMaybe)
+import           Data.Maybe       (fromMaybe, listToMaybe, maybeToList)
 import           Data.Monoid
 import           Data.Text        (Text)
 import qualified Data.Text        as Text
 import           Data.Text.Lens
 
 import           Text.Parsec
+import qualified Text.Parsec.Expr as Expr
 import           Text.Parsec.Text
 
 import           Numeric          (readDec, readHex, readInt, readOct)
@@ -42,7 +44,7 @@ instance Show Name where show n = n ^. name . _Text
 --
 -- Note that this is not pure lexing data: differentiating between
 -- some of these requires actual parsing.
-data Value = Var Name
+data Value = Variable Name
            | Num Double
            | String Text
            | Regex Text         -- TODO: better type for regex?
@@ -54,12 +56,21 @@ data Value = Var Name
            | Semicolon
            | LineEnd
 
+             -- expressions in parentheses like (1 + 2), but *not*
+             -- argument lists
+           | ParenStart
+           | ParenEnd
+
              -- array literals ([1,f(2),"foo",[1]])
            | ArrayStart
            | ArrayEnd
            | ArraySep
 
-             -- argument lists
+             -- array indexing (the [-] part of a[1])
+           | IndexStart -- [
+           | IndexEnd   -- ]
+
+             -- argument lists (function definitions *and* calls)
            | ArgStart
            | ArgEnd
            | ArgSep
@@ -104,18 +115,59 @@ instance Eq Token where
 
 instance Show Token where show = show . _value
 
--- * Parsing functions:
+-- * Parsing
+
+-- ** Parsing helpers:
 
 -- | Converts a parser that doesn't care about whitespace into one
--- that consumes and saves the whitespace *before* the token.
+-- that consumes and saves the whitespace *after* the token.
 tokenize :: Parser Value -> Parser Token
-tokenize value = Token <$> (Text.pack <$> many space) <*> value
+tokenize value = do val    <- value
+                    spaces <- Text.pack <$> many space
+                    return $ Token spaces val
+
+-- | Parses delimited lists like '1,2,3,4,' tokenizing all the pieces
+-- (both values *and* delimiters).
+--
+-- Allows an optional trailing delimiter, as long as there is at least
+-- one expression. (So just ',' won't parse!)
+tokenizedList :: Parser Token         -- ^ The separator (usually a comma).
+              -> Parser (Parse Token) -- ^ The expression between separators.
+              -> Parser [Parse Token]
+tokenizedList sep exp = do entries <- join <$> many (try entry)
+                           final   <- optionMaybe exp
+                           return $ entries <> maybeToList final
+  where -- a single 'exp' followed by a separator
+        entry = (\ a b -> [a, b]) <$> exp <*> (Leaf' <$> sep)
+
+-- | A character that makes up a valid JavaScript identifier.
+--
+-- This might not be entirely complete with obscure but valid Unicode
+-- characters like zero-width joiners.
+idChar :: Parser Char
+idChar = alphaNum <|> oneOf "$_"
+
+-- | Parses a keyword, based on @reserved@ from @Text.Parse.Token@.
+keyword :: Text -> Parser Token
+keyword keyword = tokenize $ Keyword keyword <$ parseKeyword
+  where parseKeyword =
+          do literal keyword
+             notFollowedBy idChar <?> ("end of " <> Text.unpack keyword)
+
+-- | Parses a valid name which can start with a letter/$/_ followed by
+-- any number of letters/numbers/$/_.
+identifier :: Parser Name
+identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
+  where startChar = letter <|> oneOf "$_"
+        rest = Text.pack <$> many idChar
 
 -- | Parse a literal string of characters (ie a keyword) into a 'Text'
 -- value.
 literal :: Text -> Parser Text
 literal str = Text.pack <$> (string $ Text.unpack str)
 
+
+-- ** Language Productions
 
 -- | The end of a line of code: a semicolon or a newline.
 terminator :: Parser Token
@@ -143,26 +195,8 @@ keywords = ["break", "catch", "const", "continue", "do", "export",
             "let", "return", "switch", "throw", "try",
             "var", "while", "with", "yield"]
 
--- | A character that makes up a valid JavaScript identifier.
---
--- This might not be entirely complete with obscure but valid Unicode
--- characters like zero-width joiners.
-idChar :: Parser Char
-idChar = alphaNum <|> oneOf "$_"
-
--- | Parses a keyword, based on @reserved@ from @Text.Parse.Token@.
-keyword :: Text -> Parser Token
-keyword keyword = tokenize $ Keyword keyword <$ parseKeyword
-  where parseKeyword =
-          do literal keyword
-             notFollowedBy idChar <?> ("end of " <> Text.unpack keyword)
-
--- | Parses a valid name which can start with a letter/$/_ followed by
--- any number of letters/numbers/$/_.
-identifier :: Parser Name
-identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
-  where startChar = letter <|> oneOf "$_"
-        rest = Text.pack <$> many idChar
+variable :: Parser Token
+variable = tokenize $ Variable <$> identifier
 
 -- | Parses JavaScript string literals, including both normal escapes
 -- and Unicode (both '\uXXXX' and '\u{XXXXXX}' formats).
@@ -186,7 +220,11 @@ stringLiteral = tokenize $ String <$> contents
                 fourDigit = toChar <$> count 4 hexDigit
                 other = toChar <$> between (char '{') (char '}') (many1 hexDigit)
 
+
+
                 -- TODO: Handle malformed literals like 0923, 0b1233, -0x1.2
+-- | Parses JavaScript numeric literals including other bases ('0x10')
+-- and floating point numbers with exponents ('1.5e10').
 number :: Parser Token
 number = tokenize $ Num <$> (try intLit <|> floatLit)
   where -- an integer literal *not* in decimal (ie 0x10 but not 10)
@@ -201,6 +239,7 @@ number = tokenize $ Num <$> (try intLit <|> floatLit)
                    ("0b", readBinary), ("0B", readBinary)]
         readBinary = readInt 2 (`elem` ['0','1']) (read . (:[]))
 
+        -- a float literal: 105, 10.5, 10e5, 10.1e5… etc
         floatLit = do sign <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
                       num  <- try $ many1 digit
                       dec  <- optionMaybe $ char '.' *> many1 digit
@@ -208,3 +247,62 @@ number = tokenize $ Num <$> (try intLit <|> floatLit)
                       let dec' = fromMaybe "" $ ("." ++) <$> dec
                           exp' = fromMaybe "" $ ("e" ++) <$> exp
                       return . sign . read $ num <> dec' <> exp'
+
+-- | The index part of an expression indexing into an array: ie the
+-- '[f(x)]' from 'g(y)[f(x)]'.
+indexExpression :: Parser (Parse Token)
+indexExpression = do open  <- Leaf' <$> (tokenize $ IndexStart <$ literal "[")
+                     index <- expression
+                     close <- Leaf' <$> (tokenize $ IndexEnd <$ literal "]")
+                     return $ Node' [open, index, close]
+
+-- | The arguments of a function call expression: ie the '(1,2,3)' of
+-- 'f(1,2,3)'.
+callExpression :: Parser (Parse Token)
+callExpression = do open  <- Leaf' <$> (tokenize $ ArgStart <$ literal "(")
+                    args  <- tokenizedList (tokenize $ ArgSep <$ literal ",") expression
+                    close <- Leaf' <$> (tokenize $ ArgEnd <$ literal ")")
+                    return . Node' $ (open : args) ++ [close]
+
+-- | An expression with a mix of function calls and array indexing
+-- like 'f(1)[2](3)'.
+--
+-- Separated out to deal with left-recursion.
+callsAndIndices :: Parser (Parse Token)
+callsAndIndices = do base  <- simpleAtom
+                     calls <- many1 (callExpression <|> indexExpression)
+                     return . Node' $ base : calls
+
+-- | A self-contained piece of a JavaScript expression.
+--
+-- This is split from @atom@ to avoid left-recursion.
+simpleAtom :: Parser (Parse Token)
+simpleAtom =  Leaf' <$> stringLiteral
+          <|> Leaf' <$> try number
+          <|> Leaf' <$> variable
+          <|> parens
+  where parens = do open  <- tokenize $ ParenStart <$ literal "("
+                    exp   <- expression
+                    close <- tokenize $ ParenEnd <$ literal ")"
+                    return $ Node' [Leaf' open, exp, Leaf' close]
+
+-- | Any JavaScript expression without any operators.
+atom :: Parser (Parse Token)
+atom = try callsAndIndices <|> simpleAtom
+
+-- | Any JavaScript expression.
+expression :: Parser (Parse Token)
+expression = Expr.buildExpressionParser table atom <?> "expression"
+  where table = [post "++", post "--"] :
+                (map (map pref) unaryOperators ++
+                 map (map bin) operators)
+
+        op     op left right = Node' [left, op, right]
+        unOp   op arg        = Node' [op, arg]
+        postOp op arg        = Node' [arg, op]
+
+        bin opStr  = Expr.Infix   (op     <$> operator opStr) Expr.AssocLeft
+        pref opStr = Expr.Prefix  (unOp   <$> operator opStr)
+        post opStr = Expr.Postfix (postOp <$> operator opStr)
+
+        operator = try . fmap Leaf' . tokenize . fmap Operator . literal
