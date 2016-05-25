@@ -167,7 +167,7 @@ identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
 -- | Parses JavaScript string literals, including both normal escapes
 -- and Unicode (both '\uXXXX' and '\u{XXXXXX}' formats).
 stringLiteral :: Parser Token
-stringLiteral = tokenize (String <$> contents)
+stringLiteral = tokenize $ String <$> contents
   where contents = do start <- oneOf "'\""
                       contents <- many $ strChar start
                       char start <?> "end of string"
@@ -188,19 +188,18 @@ stringLiteral = tokenize (String <$> contents)
 
                 -- TODO: Handle malformed literals like 0923, 0b1233, -0x1.2
 number :: Parser Token
-number = tokenize $ Num <$> (try floatLit <|> intLit)
-  where intLit = do sign   <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
-                    format <- optionMaybe parseFormat
+number = tokenize $ Num <$> (try intLit <|> floatLit)
+  where -- an integer literal *not* in decimal (ie 0x10 but not 10)
+        intLit = do sign   <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
+                    format <- parseFormat
                     num    <- many1 digit
                     return . sign . toFormat format $ num
         parseFormat = choice $ try . string <$> ["0x", "0X", "0b", "0B", "0"]
-        toFormat format = fromMaybe read $ do format' <- format
-                                              reader  <- lookup format' formats
-                                              return $ toReader reader
+        toFormat format = fromMaybe read $ toReader <$> lookup format formats
         toReader f = fst . head . f
         formats = [("0", readOct), ("0x", readHex), ("0X", readHex),
                    ("0b", readBinary), ("0B", readBinary)]
-        readBinary = readInt 0 (`elem` ['0','1']) (read . (:[]))
+        readBinary = readInt 2 (`elem` ['0','1']) (read . (:[]))
 
         floatLit = do sign <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
                       num  <- try $ many1 digit
