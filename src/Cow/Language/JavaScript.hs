@@ -273,6 +273,25 @@ callsAndIndices = do base  <- simpleAtom
                      calls <- many1 (callExpression <|> indexExpression)
                      return . Node' $ base : calls
 
+-- | Parses array literals like '[1,f(x), g(x)[3] + z]'.
+arrayLiteral :: Parser (Parse Token)
+arrayLiteral = do open  <- Leaf' <$> (tokenize $ ArrayStart <$ literal "[")
+                  items <- tokenizedList (tokenize $ ArraySep <$ literal ",") expression
+                  close <- Leaf' <$> (tokenize $ ArrayEnd <$ literal "]")
+                  return . Node' $ (open : items) ++ [close]
+
+-- | Parses JavaScript object literals like '{a : 10, b : 11}'.
+objectLiteral :: Parser (Parse Token)
+objectLiteral = do open  <- Leaf' <$> (tokenize $ ObjStart <$ literal "{")
+                   pairs <- tokenizedList (tokenize $ ObjSep <$ literal ",") pair
+                   close <- Leaf' <$> (tokenize $ ObjEnd <$ literal "}")
+                   return . Node' $ (open : pairs) ++ [close]
+  where -- a key value pair in an object, like 'a : 10'
+        pair = do field <- try stringLiteral <|> variable
+                  sep   <- Leaf' <$> (tokenize $ ObjSep <$ literal ":")
+                  val   <- expression
+                  return $ Node' [Leaf' field, sep, val]
+
 -- | A self-contained piece of a JavaScript expression.
 --
 -- This is split from @atom@ to avoid left-recursion.
@@ -281,6 +300,8 @@ simpleAtom =  Leaf' <$> stringLiteral
           <|> Leaf' <$> try number
           <|> Leaf' <$> variable
           <|> parens
+          <|> try arrayLiteral
+          <|> try objectLiteral
   where parens = do open  <- tokenize $ ParenStart <$ literal "("
                     exp   <- expression
                     close <- tokenize $ ParenEnd <$ literal ")"
