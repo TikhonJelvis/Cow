@@ -21,7 +21,7 @@ import           Data.Text        (Text)
 import qualified Data.Text        as Text
 import           Data.Text.Lens
 
-import           Text.Parsec
+import           Text.Parsec      hiding (label)
 import qualified Text.Parsec.Expr as Expr
 import           Text.Parsec.Text
 
@@ -49,6 +49,9 @@ data Value = Variable Name
            | String Text
            | Regex Text         -- TODO: better type for regex?
 
+           | Label Name
+           | LabelStart -- the colon after a label name
+
              -- TODO: Exauhstive types for operators and keywords?
            | Keyword Text
            | Operator Text
@@ -70,7 +73,12 @@ data Value = Variable Name
            | IndexStart -- [
            | IndexEnd   -- ]
 
-             -- argument lists (function definitions *and* calls)
+             -- arguments to called functions (the (1 + 2, 3) part of f(1 + 2, 3).
+           | CallStart
+           | CallEnd
+           | CallSep
+
+             -- argument lists (function definitions but *not* calls)
            | ArgStart
            | ArgEnd
            | ArgSep
@@ -82,10 +90,15 @@ data Value = Variable Name
            | ObjSep
            | ObjColon -- TODO: better name?
 
-             -- loop conditions (ie the (..) in for(..) and while(..)
-           | LoopStart
-           | LoopEnd
-           | ForLoopSep
+             -- loop/if/switch conditions (ie the (..) in if(..) and while(..)
+           | CondStart
+           | CondEnd
+
+           | CaseColon -- the ':' in 'case "foo":'
+
+             -- the parens after a catch (ie (..) from 'catch (e) { .. }')
+           | CatchStart
+           | CatchEnd
 
              -- blocks: function bodies and control flow
            | BlockStart
@@ -119,12 +132,25 @@ instance Show Token where show = show . _value
 
 -- ** Parsing helpers:
 
+-- | Whitespace characters that are skippable—@space@ but without
+-- newlines which need to be tracked to support JavaScript arcane
+-- semicolon rules.
+skippable :: Parser Char
+skippable = satisfy $ \ x -> Char.isSpace x && x /= '\n'
+
 -- | Converts a parser that doesn't care about whitespace into one
 -- that consumes and saves the whitespace *after* the token.
 tokenize :: Parser Value -> Parser Token
 tokenize value = do val    <- value
-                    spaces <- Text.pack <$> many space
+                    spaces <- Text.pack <$> many skippable
                     return $ Token spaces val
+
+-- | Tokenizes a parser to *also* consume newlines—used for tokens
+-- that prevent automatic semicolon insertion (ASI).
+noASI :: Parser Value -> Parser Token
+noASI value = do val    <- value
+                 spaces <- Text.pack <$> many space
+                 return $ Token spaces val
 
 -- | Parses delimited lists like '1,2,3,4,' tokenizing all the pieces
 -- (both values *and* delimiters).
@@ -166,6 +192,9 @@ identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
 literal :: Text -> Parser Text
 literal str = Text.pack <$> (string $ Text.unpack str)
 
+-- | Parses some punctuation into a token.
+punct :: Value -> Text -> Parser Token
+punct value mark = tokenize $ value <$ literal mark
 
 -- ** Language Productions
 
@@ -173,12 +202,14 @@ literal str = Text.pack <$> (string $ Text.unpack str)
 terminator :: Parser Token
 terminator = tokenize $  Semicolon <$ char ';'
                      <|> LineEnd   <$ char '\n'
+                     <|> LineEnd   <$ eof
 
+-- TODO: Figure out how to handle ternary operator properly?
 -- | All the legal JavaScript binary operators, ordered by precedence.
 operators :: [[Text]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
              [">>", ">>>", "<<"], ["<", "<=", ">", ">=", "in", "instanceof"],
-             ["==", "===", "!=", "!=="], ["&"], ["^"], ["|"], ["&&"], ["||"],
+             ["==", "===", "!=", "!=="], ["&"], ["^"], ["|"], ["&&"], ["||"], -- ["?", ":"],
              ["=", "*=", "/=", "%=", "+=", "-=", ">>=", "<<=", "&=", "|=", "^="]]
 
 
@@ -191,12 +222,22 @@ unaryOperators = [["new"], ["++", "--"], ["+", "-", "~", "!", "typeof", "void", 
 -- operators.
 keywords :: [Text]
 keywords = ["break", "catch", "const", "continue", "do", "export",
-            "for", "function", "if", "import", "label",
+            "for", "function", "if", "import", "label", "case", "default",
             "let", "return", "switch", "throw", "try",
             "var", "while", "with", "yield"]
 
+-- | Any valid identifier that is not already a reserved keyword (list
+-- in @keywords@).
 variable :: Parser Token
-variable = tokenize $ Variable <$> identifier
+variable = tokenize $ identifier >>= notKeyword
+  where notKeyword (Name name)
+          | name `elem` keywords = unexpected ("reserved keyword " ++ Text.unpack name)
+          | otherwise            = return . Variable $ Name name
+
+-- | Labels are identifiers which can be used by 'break' and
+-- 'continue' to jump out of nested loops.
+label :: Parser Token
+label = tokenize $ Label <$> identifier
 
 -- | Parses JavaScript string literals, including both normal escapes
 -- and Unicode (both '\uXXXX' and '\u{XXXXXX}' formats).
@@ -251,17 +292,17 @@ number = tokenize $ Num <$> (try intLit <|> floatLit)
 -- | The index part of an expression indexing into an array: ie the
 -- '[f(x)]' from 'g(y)[f(x)]'.
 indexExpression :: Parser (Parse Token)
-indexExpression = do open  <- Leaf' <$> (tokenize $ IndexStart <$ literal "[")
+indexExpression = do open  <- Leaf' <$> punct IndexStart "["
                      index <- expression
-                     close <- Leaf' <$> (tokenize $ IndexEnd <$ literal "]")
+                     close <- Leaf' <$> (punct IndexEnd "]")
                      return $ Node' [open, index, close]
 
 -- | The arguments of a function call expression: ie the '(1,2,3)' of
 -- 'f(1,2,3)'.
 callExpression :: Parser (Parse Token)
-callExpression = do open  <- Leaf' <$> (tokenize $ ArgStart <$ literal "(")
-                    args  <- tokenizedList (tokenize $ ArgSep <$ literal ",") expression
-                    close <- Leaf' <$> (tokenize $ ArgEnd <$ literal ")")
+callExpression = do open  <- Leaf' <$> (punct CallStart "(")
+                    args  <- tokenizedList (punct CallSep ",") expression
+                    close <- Leaf' <$> (punct CallEnd ")")
                     return . Node' $ (open : args) ++ [close]
 
 -- | An expression with a mix of function calls and array indexing
@@ -275,22 +316,43 @@ callsAndIndices = do base  <- simpleAtom
 
 -- | Parses array literals like '[1,f(x), g(x)[3] + z]'.
 arrayLiteral :: Parser (Parse Token)
-arrayLiteral = do open  <- Leaf' <$> (tokenize $ ArrayStart <$ literal "[")
-                  items <- tokenizedList (tokenize $ ArraySep <$ literal ",") expression
-                  close <- Leaf' <$> (tokenize $ ArrayEnd <$ literal "]")
+arrayLiteral = do open  <- Leaf' <$> (punct ArrayStart "[")
+                  items <- tokenizedList (punct ArraySep ",") expression
+                  close <- Leaf' <$> (punct ArrayEnd "]")
                   return . Node' $ (open : items) ++ [close]
 
 -- | Parses JavaScript object literals like '{a : 10, b : 11}'.
 objectLiteral :: Parser (Parse Token)
-objectLiteral = do open  <- Leaf' <$> (tokenize $ ObjStart <$ literal "{")
-                   pairs <- tokenizedList (tokenize $ ObjSep <$ literal ",") pair
-                   close <- Leaf' <$> (tokenize $ ObjEnd <$ literal "}")
+objectLiteral = do open  <- Leaf' <$> (punct ObjStart "{")
+                   pairs <- tokenizedList (punct ObjSep ",") pair
+                   close <- Leaf' <$> (punct ObjEnd "}")
                    return . Node' $ (open : pairs) ++ [close]
   where -- a key value pair in an object, like 'a : 10'
         pair = do field <- try stringLiteral <|> variable
-                  sep   <- Leaf' <$> (tokenize $ ObjSep <$ literal ":")
+                  sep   <- Leaf' <$> (punct ObjColon ":")
                   val   <- expression
                   return $ Node' [Leaf' field, sep, val]
+
+-- | A block is a series of statements surrounded by '{' and '}'. The
+-- braces are not optional! (The optional case for conditionals and
+-- loops is handled separately.)
+block :: Parser (Parse Token)
+block = do open  <- Leaf' <$> punct BlockStart "{"
+           body  <- many statement
+           close <- Leaf' <$> punct BlockEnd "}"
+           return . Node' $ (open : body) ++ [close]
+
+-- | A function expression. The function can *optionally* have a name:
+-- this covers both 'function () {}' and 'function foo() {}'.
+functionLiteral :: Parser (Parse Token)
+functionLiteral = do func  <- Leaf' <$> keyword "function"
+                     name  <- optionMaybe identifier
+                     open  <- Leaf' <$> punct ArgStart "("
+                     args  <- tokenizedList (punct ArgSep ",") (Leaf' <$> variable)
+                     close <- Leaf' <$> punct ArgEnd ")"
+                     body  <- block
+                     let argList = Node' $ (open : args) ++ [close]
+                     return $ Node' [func, argList, body]
 
 -- | A self-contained piece of a JavaScript expression.
 --
@@ -302,9 +364,9 @@ simpleAtom =  Leaf' <$> stringLiteral
           <|> parens
           <|> try arrayLiteral
           <|> try objectLiteral
-  where parens = do open  <- tokenize $ ParenStart <$ literal "("
+  where parens = do open  <- punct ParenStart "("
                     exp   <- expression
-                    close <- tokenize $ ParenEnd <$ literal ")"
+                    close <- punct ParenEnd ")"
                     return $ Node' [Leaf' open, exp, Leaf' close]
 
 -- | Any JavaScript expression without any operators.
@@ -324,6 +386,89 @@ expression = Expr.buildExpressionParser table atom <?> "expression"
 
         bin opStr  = Expr.Infix   (op     <$> operator opStr) Expr.AssocLeft
         pref opStr = Expr.Prefix  (unOp   <$> operator opStr)
-        post opStr = Expr.Postfix (postOp <$> operator opStr)
+        post opStr = Expr.Postfix (postOp <$> asiOp opStr)
 
-        operator = try . fmap Leaf' . tokenize . fmap Operator . literal
+        operator = try . fmap Leaf' . noASI . fmap Operator . literal
+        asiOp    = try . fmap Leaf' . tokenize . fmap Operator . literal
+
+-- | An 'if' statement with an optional 'else' clause afterwards.
+ifElse :: Parser (Parse Token)
+ifElse = do if'   <- Leaf' <$> keyword "if"
+            start <- Leaf' <$> punct CondStart "("
+            cond  <- expression
+            end   <- Leaf' <$> punct CondEnd ")"
+            body  <- statement
+            else' <- maybeToList <$> optionMaybe elseClause
+            return . Node' $ [if', start, cond, end, body] ++ else'
+  where elseClause = do else' <- Leaf' <$> keyword "else"
+                        body  <- statement
+                        return $ Node' [else', body]
+
+-- | A 'try { ... }' statement with any number of 'catch' clauses and
+-- an optional 'finally' clause.
+--
+-- This will parse if there are no 'catch' *or* 'finally' clauses even
+-- though that isn't strictly valid JavaScript.
+tryCatch :: Parser (Parse Token)
+tryCatch = do try     <- Leaf' <$> keyword "try"
+              body    <- block
+              catches <- many catch
+              finally <- maybeToList <$> optionMaybe finally
+              return . Node' $ [try, body] ++ catches ++ finally
+  where catch = do start <- Leaf' <$> keyword "catch"
+                   open  <- Leaf' <$> punct CatchStart "("
+                   eName <- Leaf' <$> variable
+                   close <- Leaf' <$> punct CatchEnd ")"
+                   body  <- block
+                   return $ Node' [start, open, eName, close, body]
+        finally = do start <- Leaf' <$> keyword "finally"
+                     body  <- block
+                     return $ Node' [start, body]
+
+-- | Parses a switch statement ('switch (foo) { case 'a': ... default: ... }').
+switch :: Parser (Parse Token)
+switch = do start <- Leaf' <$> keyword "switch"
+            open  <- Leaf' <$> punct CondStart "("
+            cond  <- expression
+            close <- Leaf' <$> punct CondEnd ")"
+            body <- caseBlock
+            return $ Node' [start, open, cond, close, body]
+  where caseBlock = do open  <- Leaf' <$> punct BlockStart "{"
+                       body  <- many (case_ <|> default_)
+                       close <- Leaf' <$> punct BlockEnd "}"
+                       return . Node' $ (open : body) ++ [close]
+        case_ = do start <- Leaf' <$> keyword "case"
+                   val   <- expression
+                   end   <- Leaf' <$> punct CaseColon ":"
+                   body  <- many (try statement)
+                   return . Node' $ [start, val, end] ++ body
+        default_ = do start <- Leaf' <$> keyword "default"
+                      end   <- Leaf' <$> punct CaseColon  ":"
+                      body  <- many statement
+                      return . Node' $ [start, end] ++ body
+
+-- | A JavaScript statement, including its terminator (ie explicit or
+-- implicit semicolon).
+statement :: Parser (Parse Token)
+statement = do contents <- statement'
+               -- terminator is optional to handle end of block (ie '{
+               -- 1 + 2 }' on one line)
+               end      <- optionMaybe $ Leaf' <$> terminator
+               return . Node' $ contents : maybeToList end
+ where statement' =  try block
+                 <|> try expression
+                 <|> keyworded "return" expression
+                 <|> keyworded "throw" expression
+                 <|> keyworded "break" (Leaf' <$> label)
+                 <|> keyworded "continue" (Leaf' <$> label)
+                 <|> (Leaf' <$> keyword "debugger")
+                 <|> labelDecl
+                 <|> ifElse
+                 <|> tryCatch
+                 <|> switch
+       keyworded word val = do start <- Leaf' <$> keyword word
+                               end   <- optionMaybe val
+                               return . Node' $ start : maybeToList end
+       labelDecl = do l <- Leaf' <$> label
+                      c <- Leaf' <$> punct LabelStart ":"
+                      return $ Node' [l, c]
