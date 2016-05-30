@@ -165,7 +165,7 @@ blockComment = do contents <- between (literal "/*") (literal "*/") anything
 
 -- | Either kind of comment.
 comment :: Parser Value
-comment = lineComment <|> blockComment
+comment = try lineComment <|> blockComment
 
 -- | Converts a parser that doesn't care about whitespace into one
 -- that consumes and saves the whitespace *after* the token, as well
@@ -174,7 +174,7 @@ tokenize :: Parser Value -> Parser Term
 tokenize value = do val     <- value
                     spaces  <- Text.pack <$> many skippable
                     let token = Leaf' $ Token spaces val
-                    optionMaybe (tokenize comment) <&> \case
+                    optionMaybe (try $ tokenize comment) <&> \case
                       Just comment -> Node' [token, comment]
                       Nothing      -> token
 
@@ -184,7 +184,7 @@ noASI :: Parser Value -> Parser Term
 noASI value = do val    <- value
                  spaces <- Text.pack <$> many space
                  let token = Leaf' $ Token spaces val
-                 optionMaybe (noASI comment) <&> \case
+                 optionMaybe (try $ noASI comment) <&> \case
                    Just comment -> Node' [token, comment]
                    Nothing      -> token
 
@@ -253,8 +253,8 @@ terminator = noASI $  Semicolon <$ char ';'
 -- | All the legal JavaScript binary operators, ordered by precedence.
 operators :: [[Text]]
 operators = [["."], ["*", "/", "%"], ["+", "-"],
-             [">>", ">>>", "<<"], ["<", "<=", ">", ">=", "in", "instanceof"],
-             ["==", "===", "!=", "!=="], ["&"], ["^"], ["|"], ["&&"], ["||"], -- ["?", ":"],
+             [">>>", ">>", "<<"], ["<=", "<", ">=", ">", "instanceof", "in"],
+             ["===", "==", "!==", "!="], ["&"], ["^"], ["|"], ["&&"], ["||"],
              ["=", "*=", "/=", "%=", "+=", "-=", ">>=", "<<=", "&=", "|=", "^="]]
 
 
@@ -434,8 +434,10 @@ expression = Expr.buildExpressionParser table atom <?> "expression"
         pref opStr = Expr.Prefix  (unOp   <$> operator opStr)
         post opStr = Expr.Postfix (postOp <$> asiOp opStr)
 
-        operator = try . noASI . fmap Operator . literal
-        asiOp    = try . tokenize . fmap Operator . literal
+        operator = try . noASI . fmap Operator . opLiteral
+        asiOp    = try . tokenize . fmap Operator . opLiteral
+
+        opLiteral str = literal str <* notFollowedBy (oneOf ".*/%+-><=!&^|")
 
 -- | Declaring a variable with 'var', 'let' or 'const'. Currently does
 -- not support destructuring assignment.
@@ -573,6 +575,7 @@ statement = do contents <- statement'
                  <|> try (for' "in")
                  <|> try (for' "of")
                  <|> try with
+                 <|> tokenize comment
        keyworded word val = try $ do start <- keyword word
                                      end   <- optionMaybe val
                                      return . Node' $ start : maybeToList end
@@ -582,4 +585,4 @@ statement = do contents <- statement'
 
 -- | Parses a whole JavaScript program.
 program :: Parser Term
-program = Node' <$> many statement
+program = many space *> (Node' <$> many statement)
