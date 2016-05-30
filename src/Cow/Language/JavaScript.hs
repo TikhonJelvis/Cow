@@ -548,3 +548,7 @@ statement = do contents <- statement'
        labelDecl = do l <- label
                       c <- punct LabelStart ":"
                       return $ Node' [l, c]
+
+-- | Parses a whole JavaScript program.
+program :: Parser Term
+program = Node' <$> many statement
