@@ -199,9 +199,10 @@ identifier = Name <$> (Text.cons <$> startChar <*> rest) <?> "identifier"
 literal :: Text -> Parser Text
 literal str = Text.pack <$> (string $ Text.unpack str)
 
--- | Parses some punctuation into a token.
+-- | Parses some punctuation into a token. As far as I know,
+-- semicolons should never be inserted after punctuation.
 punct :: Value -> Text -> Parser Term
-punct value mark = tokenize $ value <$ literal mark
+punct value mark = noASI $ value <$ literal mark
 
 -- | Parses a condition (the '(..)' in 'if (..)', 'while (..)',
 -- 'switch (..)' and so on).
@@ -215,9 +216,9 @@ condition contents = do open  <- punct CondStart "("
 
 -- | The end of a line of code: a semicolon or a newline.
 terminator :: Parser Term
-terminator = tokenize $  Semicolon <$ char ';'
-                     <|> LineEnd   <$ char '\n'
-                     <|> LineEnd   <$ eof
+terminator = noASI $  Semicolon <$ char ';'
+                  <|> LineEnd   <$ char '\n'
+                  <|> LineEnd   <$ eof
 
 -- TODO: Figure out how to handle ternary operator properly?
 -- | All the legal JavaScript binary operators, ordered by precedence.
@@ -374,11 +375,12 @@ functionLiteral = do func  <- keyword "function"
 -- This is split from @atom@ to avoid left-recursion.
 simpleAtom :: Parser Term
 simpleAtom =  stringLiteral
+          <|> try arrayLiteral
+          <|> try objectLiteral
+          <|> try functionLiteral
           <|> try number
           <|> variable
           <|> parens
-          <|> try arrayLiteral
-          <|> try objectLiteral
   where parens = do open  <- punct ParenStart "("
                     exp   <- expression
                     close <- punct ParenEnd ")"
