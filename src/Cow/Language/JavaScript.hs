@@ -84,6 +84,8 @@ data Value = Variable Name
            | ArgEnd
            | ArgSep
 
+           | DeclSep -- the ',' in 'var x = 10, y;'
+
              -- object literals
            | ObjStart
            | ObjEnd
@@ -391,24 +393,24 @@ block = do open  <- punct BlockStart "{"
 -- this covers both 'function () {}' and 'function foo() {}'.
 functionLiteral :: Parser Term
 functionLiteral = do func  <- keyword "function"
-                     name  <- optionMaybe identifier
+                     name  <- optionMaybe variable
                      open  <- punct ArgStart "("
                      args  <- tokenizedList (punct ArgSep ",") variable
                      close <- punct ArgEnd ")"
                      body  <- block
                      let argList = Node' $ (open : args) ++ [close]
-                     return $ Node' [func, argList, body]
+                     return $ Node' $ func : (maybeToList name ++ [argList, body])
 
 -- | A self-contained piece of a JavaScript expression.
 --
 -- This is split from @atom@ to avoid left-recursion.
 simpleAtom :: Parser Term
 simpleAtom =  stringLiteral
+          <|> try functionLiteral
           <|> try arrayLiteral
           <|> try objectLiteral
-          <|> try functionLiteral
           <|> try number
-          <|> variable
+          <|> try variable
           <|> parens
   where parens = do open  <- punct ParenStart "("
                     exp   <- expression
@@ -443,10 +445,15 @@ expression = Expr.buildExpressionParser table atom <?> "expression"
 -- not support destructuring assignment.
 declaration :: Parser Term
 declaration = do start <- keyword "var" <|> keyword "let" <|> keyword "const"
-                 name  <- variable
-                 eq    <- tokenize $ Operator <$> literal "="
-                 val   <- expression
-                 return $ Node' [start, name, eq, val]
+                 defs  <- tokenizedList (punct DeclSep ",") varDef
+                 return $ Node' $ start : defs
+  where varDef  = do name <- variable
+                     val  <- optionMaybe setting
+                     return $ Node' $ name : maybeToList val
+        setting = do op  <- tokenize $ Operator <$> literal "="
+                     val <- expression
+                     return $ Node' [op, val]
+
 
 -- | An 'if' statement with an optional 'else' clause afterwards.
 ifElse :: Parser Term
