@@ -94,6 +94,8 @@ data Value = Variable Name
            | CondStart
            | CondEnd
 
+           | ForSep             -- the ; in a for(;;) loop.
+
            | CaseColon -- the ':' in 'case "foo":'
 
              -- the parens after a catch (ie (..) from 'catch (e) { .. }')
@@ -200,6 +202,14 @@ literal str = Text.pack <$> (string $ Text.unpack str)
 -- | Parses some punctuation into a token.
 punct :: Value -> Text -> Parser Term
 punct value mark = tokenize $ value <$ literal mark
+
+-- | Parses a condition (the '(..)' in 'if (..)', 'while (..)',
+-- 'switch (..)' and so on).
+condition :: Parser Term -> Parser Term
+condition contents = do open  <- punct CondStart "("
+                        stuff <- contents
+                        close <- punct CondEnd ")"
+                        return $ Node' [open, stuff, close]
 
 -- ** Language Productions
 
@@ -408,12 +418,10 @@ declaration = do start <- keyword "var" <|> keyword "let" <|> keyword "const"
 -- | An 'if' statement with an optional 'else' clause afterwards.
 ifElse :: Parser Term
 ifElse = do if'   <- keyword "if"
-            start <- punct CondStart "("
-            cond  <- expression
-            end   <- punct CondEnd ")"
+            cond  <- condition expression
             body  <- statement
             else' <- maybeToList <$> optionMaybe elseClause
-            return . Node' $ [if', start, cond, end, body] ++ else'
+            return . Node' $ [if', cond, body] ++ else'
   where elseClause = do else' <- keyword "else"
                         body  <- statement
                         return $ Node' [else', body]
@@ -442,11 +450,9 @@ tryCatch = do try     <- keyword "try"
 -- | Parses a switch statement ('switch (foo) { case 'a': ... default: ... }').
 switch :: Parser Term
 switch = do start <- keyword "switch"
-            open  <- punct CondStart "("
-            cond  <- expression
-            close <- punct CondEnd ")"
+            cond  <- condition expression
             body  <- caseBlock
-            return $ Node' [start, open, cond, close, body]
+            return $ Node' [start, cond, body]
   where caseBlock = do open  <- punct BlockStart "{"
                        body  <- many (case_ <|> default_)
                        close <- punct BlockEnd "}"
@@ -460,6 +466,55 @@ switch = do start <- keyword "switch"
                       end   <- punct CaseColon  ":"
                       body  <- many statement
                       return . Node' $ [start, end] ++ body
+
+-- | Simple 'while' loops.
+while :: Parser Term
+while = do start <- keyword "while"
+           cond  <- condition expression
+           body  <- statement
+           return $ Node' [start, cond, body]
+
+-- | do-while loops. Do people even use these any more?
+doWhile :: Parser Term
+doWhile = do start <- keyword "do"
+             body  <- block
+             while <- keyword "while"
+             cond  <- condition expression
+             return $ Node' [start, body, while, cond]
+
+-- | For loops of the form 'for (;;)'.
+for :: Parser Term
+for = do start <- keyword "for"
+         cond  <- condition forCondition
+         body  <- statement
+         return $ Node' [start, cond, body]
+  where forCondition = do init <- expression <|> declaration
+                          sep1 <- punct ForSep ";"
+                          cond <- expression
+                          sep2 <- punct ForSep ";"
+                          end  <- expression
+                          return $ Node' [init, sep1, cond, sep2, end]
+
+-- | A 'for (x in ls)' or 'for (x of ls)' loop.
+for' :: Text -> Parser Term
+for' sep = do start <- keyword "for"
+              cond  <- condition for'Condition
+              body  <- statement
+              return $ Node' [start, cond, body]
+  where for'Condition = do var  <- optionMaybe $ keyword "var"
+                           name <- variable
+                           in_  <- keyword sep
+                           ls   <- expression
+                           let var' = maybeToList var
+                           return $ Node' $ var' ++ [name, in_, ls]
+
+-- | A 'with' statement which you probably *shouldn't* use any
+-- more—but I'm sure people do.
+with :: Parser Term
+with = do start <- keyword "with"
+          cond  <- condition expression
+          body  <- statement
+          return $ Node' [start, cond, body]
 
 -- | A JavaScript statement, including its terminator (ie explicit or
 -- implicit semicolon).
@@ -481,6 +536,12 @@ statement = do contents <- statement'
                  <|> ifElse
                  <|> tryCatch
                  <|> switch
+                 <|> while
+                 <|> doWhile
+                 <|> for
+                 <|> for' "in"
+                 <|> for' "of"
+                 <|> with
        keyworded word val = do start <- keyword word
                                end   <- optionMaybe val
                                return . Node' $ start : maybeToList end
