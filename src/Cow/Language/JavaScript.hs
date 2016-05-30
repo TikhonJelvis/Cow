@@ -421,9 +421,9 @@ simpleAtom =  stringLiteral
 atom :: Parser Term
 atom = try callsAndIndices <|> simpleAtom
 
--- | Any JavaScript expression.
-expression :: Parser Term
-expression = Expr.buildExpressionParser table atom <?> "expression"
+-- | Any JavaScript expression except for the ternary operator ('a ? b : c').
+expression' :: Parser Term
+expression' = Expr.buildExpressionParser table atom <?> "expression"
   where table = [post "++", post "--"] :
                 (map (map pref) unaryOperators ++
                  map (map bin) operators)
@@ -440,6 +440,20 @@ expression = Expr.buildExpressionParser table atom <?> "expression"
         asiOp    = try . tokenize . fmap Operator . opLiteral
 
         opLiteral str = literal str <* notFollowedBy (oneOf ".*/%+-><=!&^|")
+
+
+-- | Parses the ternary operator ('a ? b : c').
+ternary :: Parser Term
+ternary = do cond  <- expression'
+             start <- noASI $ Operator <$> literal "?"
+             then_ <- expression
+             end   <- noASI $ Operator <$> literal ":"
+             else_ <- expression
+             return $ Node' [cond, start, then_, end, else_]
+
+-- | Any JavaScript expression.
+expression :: Parser Term
+expression = try ternary <|> expression'
 
 -- | Declaring a variable with 'var', 'let' or 'const'. Currently does
 -- not support destructuring assignment.
