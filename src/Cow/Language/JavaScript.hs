@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE TemplateHaskell     #-}
@@ -11,7 +12,7 @@
 -- conformance to actual JavaScript syntax.
 module Cow.Language.JavaScript where
 
-import           Control.Lens
+import           Control.Lens     hiding (noneOf)
 import           Control.Monad    (join)
 
 import qualified Data.Char        as Char
@@ -145,19 +146,47 @@ type Term = Parse Token
 skippable :: Parser Char
 skippable = satisfy $ \ x -> Char.isSpace x && x /= '\n'
 
+                             -- TODO: Should this consume the final
+                             -- newline as well?
+-- | Line comments like '// this is a comment'.
+lineComment :: Parser Value
+lineComment = do literal "//"
+                 contents <- many $ noneOf "\n"
+                 return $ LineComment $ Text.pack contents
+
+-- | Block comments that can span multiple lines (like '/* comment
+-- */').
+--
+-- Note that block comments *do not nest* in JavaScript!
+blockComment :: Parser Value
+blockComment = do contents <- between (literal "/*") (literal "*/") anything
+                  return $ BlockComment $ Text.pack contents
+  where anything = many $ noneOf "*" <|> (try $ char '*' <* notFollowedBy (char '/'))
+
+-- | Either kind of comment.
+comment :: Parser Value
+comment = lineComment <|> blockComment
+
 -- | Converts a parser that doesn't care about whitespace into one
--- that consumes and saves the whitespace *after* the token.
+-- that consumes and saves the whitespace *after* the token, as well
+-- as handling comments.
 tokenize :: Parser Value -> Parser Term
-tokenize value = do val    <- value
-                    spaces <- Text.pack <$> many skippable
-                    return $ Leaf' $ Token spaces val
+tokenize value = do val     <- value
+                    spaces  <- Text.pack <$> many skippable
+                    let token = Leaf' $ Token spaces val
+                    optionMaybe (tokenize comment) <&> \case
+                      Just comment -> Node' [token, comment]
+                      Nothing      -> token
 
 -- | Tokenizes a parser to *also* consume newlines—used for tokens
 -- that prevent automatic semicolon insertion (ASI).
 noASI :: Parser Value -> Parser Term
 noASI value = do val    <- value
                  spaces <- Text.pack <$> many space
-                 return $ Leaf' $ Token spaces val
+                 let token = Leaf' $ Token spaces val
+                 optionMaybe (noASI comment) <&> \case
+                   Just comment -> Node' [token, comment]
+                   Nothing      -> token
 
 -- | Parses delimited lists like '1,2,3,4,' tokenizing all the pieces
 -- (both values *and* delimiters).
@@ -528,25 +557,25 @@ statement = do contents <- statement'
                return . Node' $ contents : maybeToList end
  where statement' =  try block
                  <|> try expression
-                 <|> declaration
+                 <|> try declaration
                  <|> keyworded "return" expression
                  <|> keyworded "throw" expression
                  <|> keyworded "break" label
                  <|> keyworded "continue" label
                  <|> keyword "debugger"
-                 <|> labelDecl
-                 <|> ifElse
-                 <|> tryCatch
-                 <|> switch
-                 <|> while
-                 <|> doWhile
-                 <|> for
-                 <|> for' "in"
-                 <|> for' "of"
-                 <|> with
-       keyworded word val = do start <- keyword word
-                               end   <- optionMaybe val
-                               return . Node' $ start : maybeToList end
+                 <|> try labelDecl
+                 <|> try ifElse
+                 <|> try tryCatch
+                 <|> try switch
+                 <|> try while
+                 <|> try doWhile
+                 <|> try for
+                 <|> try (for' "in")
+                 <|> try (for' "of")
+                 <|> try with
+       keyworded word val = try $ do start <- keyword word
+                                     end   <- optionMaybe val
+                                     return . Node' $ start : maybeToList end
        labelDecl = do l <- label
                       c <- punct LabelStart ":"
                       return $ Node' [l, c]
