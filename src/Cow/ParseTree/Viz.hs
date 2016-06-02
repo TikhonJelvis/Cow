@@ -25,7 +25,7 @@ import           Cow.ParseTree.Read
 -- the nodes they're connecting) and node shapes.
 renderAnnotTree edgeColor renderNode parseTree = renderTree' renderNode renderEdge tree
   where tree = clusterLayoutTree parseTree
-        renderEdge (annot1, p1) (annot2, p2) = curve p1 p2 # lc (edgeColor annot1 annot2)
+        renderEdge (annot1, p1) (annot2, p2) = curve p1 p2 # lc (edgeColor annot1 annot2) # lw 5
 
         -- Connects nodes with a Bézier curve to help avoid
         -- overlapping edges and make connections easy to follow
@@ -40,11 +40,16 @@ renderAnnotTree edgeColor renderNode parseTree = renderTree' renderNode renderEd
 -- internal is added or removed, all its children and edges are
 -- colored.
 renderDiffTree = renderAnnotTree edgeColor $ \case
-  (action, Nothing)  -> circle 0.5 # fc (colorOf action)
-  (action, Just str) -> text str <> circle 1 # fc white # lc (colorOf action)
+  (action, Nothing)  -> circle 0.5 # fc (colorOf action) # lw 5
+  (action, Just str) -> (strutY 0.5 === text str) <> rect (w str) 1 # fc (bgOf action)
+                                                                    # lc (bgOf action)
   where colorOf Add'    = green
         colorOf Remove' = red
         colorOf None'   = black
+
+        bgOf action = blend 0.6 (colorOf action) white
+
+        w label = fromIntegral (length label) * charWidth + nodeSpacing - 1
 
         edgeColor (action, _)   _  = colorOf action
 
@@ -52,11 +57,14 @@ renderDiffTree = renderAnnotTree edgeColor $ \case
 renderParseTree = renderAnnotTree (\ a b -> black) renderNode
   where -- Render leaves as white circles and nodes as black dots
         renderNode (_, Nothing) = circle 0.2 # fc black
-        renderNode (_, Just str) = text str <> circle 1 # fc white
+        renderNode (_, Just str) = text str <> rect (w str) 1 # fc white
+
+        w label = fromIntegral (length label) * charWidth + nodeSpacing - 1
 
           -- TODO: abstract over this!
-nodeSpacing :: (Floating n, Ord n) => n
+nodeSpacing, charWidth :: (Floating n, Ord n) => n
 nodeSpacing = 4
+charWidth   = 0.25
 
 -- | Calculates the y coordinate of each node in a tree, counting up
 -- from the leaves which are all at y = 0.
@@ -70,7 +78,7 @@ nodeY (Node annot children) = Node (maximum depths + nodeSpacing, annot) childre
 -- are all evenly arranged at the bottom of the tree, with each
 -- internal node centered *relative to its leaves* (not necessarily
 -- its direct sub-nodes).
-nodeX :: (Floating n, Ord n) => ParseTree annot leaf -> ParseTree (n, annot) leaf
+nodeX :: (Floating n, Ord n) => ParseTree annot String -> ParseTree (n, annot) String
 nodeX tree = offsetAndCenter $ nodeWidth tree
   where -- Calculate the x offset of every node in a tree to center
         -- the root node and move the subtrees relative to each other
@@ -86,15 +94,17 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
                   return $ node' : children'
 
         -- Calculate how many leaves are under each node (any number
-        -- of levels down). Leaves have a width of 'nodeSpacing'.
-        nodeWidth (Leaf annot leaf)     = Leaf (nodeSpacing, annot) leaf
+        -- of levels down). Leaves have a width that depends on the
+        -- length of their label, with 'nodeSpacing' padding.
+        nodeWidth (Leaf annot leaf)     = Leaf (nodeSpacing + textWidth leaf, annot) leaf
+          where textWidth str = fromIntegral (length str) * charWidth
         nodeWidth (Node annot children) = Node (sum widths, annot) children'
           where children' = nodeWidth <$> children
                 widths    = children' ^.. each . topAnnot . _1
 
 -- | Lays a whole tree out with everything aligned from the leaves up.
-clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot leaf ->
-                                            Rose.Tree ((annot, Maybe leaf), P2 n)
+clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot String ->
+                                            Rose.Tree ((annot, Maybe String), P2 n)
 clusterLayoutTree = fmap go . toRoseTreeAnnot . (annots %~ toP2) . nodeX . nodeY
   where go ((pos, annot), leaf) = ((annot, leaf), pos)
         toP2 (width, (depth, annot)) = (p2 (width, depth), annot)
