@@ -28,115 +28,9 @@ import           Text.Parsec.Text
 
 import           Numeric          (readDec, readHex, readInt, readOct)
 
+import           Cow.Language.JavaScript.Value
+import           Cow.Language.Token
 import           Cow.ParseTree
-
--- * Tokens
-
--- | The name of an identifier or object key, kept abstract to
--- differentiate from strings. (Not 100% sure about this design
--- decision.)
-newtype Name = Name { _name :: Text } deriving Eq
-
-makeLenses ''Name
-
-instance Show Name where show n = n ^. name . _Text
-
--- | The kinds of tokens we ultimately parse.
---
--- Note that this is not pure lexing data: differentiating between
--- some of these requires actual parsing.
-data Value = Variable Name
-           | Num Double
-           | String Text
-           | Regex Text         -- TODO: better type for regex?
-
-           | Label Name
-           | LabelStart -- the colon after a label name
-
-             -- TODO: Exauhstive types for operators and keywords?
-           | Keyword Text
-           | Operator Text
-
-           | Semicolon
-           | LineEnd
-
-             -- expressions in parentheses like (1 + 2), but *not*
-             -- argument lists
-           | ParenStart
-           | ParenEnd
-
-             -- array literals ([1,f(2),"foo",[1]])
-           | ArrayStart
-           | ArrayEnd
-           | ArraySep
-
-             -- array indexing (the [-] part of a[1])
-           | IndexStart -- [
-           | IndexEnd   -- ]
-
-             -- arguments to called functions (the (1 + 2, 3) part of f(1 + 2, 3).
-           | CallStart
-           | CallEnd
-           | CallSep
-
-             -- argument lists (function definitions but *not* calls)
-           | ArgStart
-           | ArgEnd
-           | ArgSep
-
-           | DeclSep -- the ',' in 'var x = 10, y;'
-
-             -- object literals
-           | ObjStart
-           | ObjEnd
-           | ObjKey Name
-           | ObjSep
-           | ObjColon -- TODO: better name?
-
-             -- loop/if/switch conditions (ie the (..) in if(..) and while(..)
-           | CondStart
-           | CondEnd
-
-           | ForSep             -- the ; in a for(;;) loop.
-
-           | CaseColon -- the ':' in 'case "foo":'
-
-             -- the parens after a catch (ie (..) from 'catch (e) { .. }')
-           | CatchStart
-           | CatchEnd
-
-             -- blocks: function bodies and control flow
-           | BlockStart
-           | BlockEnd
-
-             -- comments
-           | LineComment Text   -- // ..
-           | BlockComment Text  -- /* .. */
-           deriving (Show, Eq)
-
-makePrisms ''Value
-
--- | A single JavaScript token that preserves the whitespace consumed
--- in parsing it.
-data Token = Token { _whitespace :: Text
-                   -- ^ The whitespace *before* this token.
-                   , _value      :: Value
-                   -- ^ The semantic role of this token (ie list
-                   -- separator, object key) with any relevant content
-                   -- (ie the identifier itself).
-                   }
-
-makeLenses ''Token
-
-instance Eq Token where
-  t1 == t2 = t1 ^. value == t2 ^. value
-
-instance Show Token where show = show . _value
-
--- | A term is any valid fragment of JavaScript. This handles
--- whitespace (thanks to 'Token') and can be put directly into a
--- larger tree (ie a larger 'Term').
-type Term = Parse Token
 
 -- * Parsing
 
@@ -606,4 +500,4 @@ statement = do contents <- statement'
 
 -- | Parses a whole JavaScript program.
 program :: Parser Term
-program = many space *> (Node' <$> many statement)
+program = many space *> (Node' <$> many statement) <* eof
