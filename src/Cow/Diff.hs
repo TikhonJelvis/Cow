@@ -25,10 +25,10 @@ type Weigh leaf = Parse leaf -> ParseTree Weight leaf
   -- actually makes any sense!
 -- | Calculate the weight of a tree exponentially discounting each
 -- additional level.
-expDiscount :: Weight -> Weigh leaf
-expDiscount α (Leaf _ leaf)     = Leaf 1 leaf
-expDiscount α (Node _ children) = Node (1 + α * sumOf (each . Tree.annots) result) result
-  where result = expDiscount α <$> children
+expDiscount :: (leaf -> Weight) -> Weight -> Weigh leaf
+expDiscount ℓ α (Leaf _ leaf)     = Leaf (ℓ leaf) leaf
+expDiscount ℓ α (Node _ children) = Node (1 + α * sumOf (each . Tree.annots) result) result
+  where result = expDiscount ℓ α <$> children
 
           -- TODO: Clarify and verify!
 -- | The weight of a node is n% of its possible range.
@@ -41,15 +41,14 @@ expDiscount α (Node _ children) = Node (1 + α * sumOf (each . Tree.annots) res
 -- This heuristic is equal to minimum + n * (maximum - minimum).
 --
 -- Leaves have weight 1 by fiat.
-percentage :: forall leaf. Weight -> Weigh leaf
-percentage n (Leaf _ leaf)     = Leaf 1 leaf
-percentage n (Node _ children) = Node (min + n * (max - min)) children'
+percentage :: (leaf -> Weight) -> Weight -> Weigh leaf
+percentage ℓ α (Leaf _ leaf)     = Leaf (ℓ leaf) leaf
+percentage ℓ α (Node _ children) = Node (min + α * (max - min)) children'
   where -- TODO: make children NonEmpty?
         Just min = minimumOf (each . Tree.topAnnot) children'
-        max = sumOf (each . Tree.topAnnot) children'
+        max      = sumOf (each . Tree.topAnnot) children'
 
-        children' :: [ParseTree Weight leaf]
-        children' = percentage n <$> children
+        children' = percentage ℓ α <$> children
 
 -- | A few arrays representing the structure of a tree for fast
 -- indexing.
