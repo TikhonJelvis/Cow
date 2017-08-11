@@ -13,13 +13,13 @@ import           Data.List           (minimumBy)
 import           Data.Maybe          (mapMaybe)
 import           Data.Ord            (comparing)
 
-import           Cow.ParseTree       (NodeType (..), Parse, ParseTree (..))
+import           Cow.ParseTree       (NodeType (..), Parse', Parse (..))
 import qualified Cow.ParseTree       as Tree
 
 type Weight = Double
 
 -- | A function which assigns every subtree a weight.
-type Weigh leaf = Parse leaf -> ParseTree Weight leaf
+type Weigh leaf = Parse' leaf -> Parse Weight leaf
 
   -- TODO: Figure out how this function behaves and whether it
   -- actually makes any sense!
@@ -65,7 +65,7 @@ makeLenses ''Tables
 
 -- | Given a tree, creates arrays that specify its structure in a way
 -- that's fast to index.
-tables :: Weigh leaf -> Parse leaf -> Tables leaf
+tables :: Weigh leaf -> Parse' leaf -> Tables leaf
 tables weigh tree = Tables { _jumps   = Tree.preorderTable $ Tree.jumps tree
                            , _nodes   = Tree.nodeTable tree
                            , _weights = Tree.preorderTable $ weigh tree
@@ -101,7 +101,7 @@ type DistTable = Array (Int, Int) Dist
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
-distTable :: Eq a => (Parse a -> ParseTree Weight a) -> Parse a -> Parse a -> DistTable
+distTable :: Eq a => (Parse' a -> Parse Weight a) -> Parse' a -> Parse' a -> DistTable
 distTable weigh input output = ds
   where (endIn, endOut) = (Tree.size input, Tree.size output)
         bounds = ((0, 0), (endIn, endOut))
@@ -144,7 +144,7 @@ distTable weigh input output = ds
                           ]
 
 -- | Calculate the distance between two trees using our metric.
-diff :: Eq a => Weigh a -> Parse a -> Parse a -> Dist
+diff :: Eq a => Weigh a -> Parse' a -> Parse' a -> Dist
 diff weigh left right = distTable weigh left right ! (0, 0)
 
 -- | Annotates a node in a tree with whether it was added, removed or
@@ -153,15 +153,15 @@ data Action' = Add' | Remove' | None' deriving (Show, Eq)
 
 -- | Compares two trees and returns all the added and removed
 -- subtrees.
-toSubTrees :: Eq a => Weigh a -> Parse a -> Parse a -> [ParseTree Action' a]
+toSubTrees :: Eq a => Weigh a -> Parse' a -> Parse' a -> [Parse Action' a]
 toSubTrees weigh input output = mapMaybe go actions
   where actions = diff weigh input output ^. edits
 
         go (Remove i) = Tree.getSubTree i input  <&> Tree.annots .~ Remove'
         go (Add o)    = Tree.getSubTree o output <&> Tree.annots .~ Add'
 
-annotateTrees :: forall a. Eq a => Weigh a -> Parse a -> Parse a ->
-                 (ParseTree Action' a, ParseTree Action' a)
+annotateTrees :: forall a. Eq a => Weigh a -> Parse' a -> Parse' a ->
+                 (Parse Action' a, Parse Action' a)
 annotateTrees weigh input output = (input', output')
   where input'  = go Remove' removed $ Tree.preorder input
         output' = go Add' added $ Tree.preorder output

@@ -14,13 +14,14 @@ import           Cow.ParseTree
 
 -- | A single token that preserves the whitespace consumed in parsing
 -- it.
-data Token a = Token { _whitespace :: Text
-                     -- ^ The whitespace *before* this token.
-                     , _value      :: a
-                     -- ^ The semantic role of this token (ie list
-                     -- separator, object key) with any relevant content
-                     -- (ie the identifier itself).
-                     }
+data Token a = Token
+  { _whitespace :: Text
+    -- ^ The whitespace *before* this token.
+  , _value      :: a
+    -- ^ The semantic role of this token (ie list
+    -- separator, object key) with any relevant content
+    -- (ie the identifier itself).
+  }
 
 makeLenses ''Token
 

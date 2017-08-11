@@ -167,4 +167,4 @@ weigh value | important value = 1
 -- | A term is any valid fragment of JavaScript. This handles
 -- whitespace (thanks to 'Token') and can be put directly into a
 -- larger tree (ie a larger 'Term').
-type Term = Parse (Token Value)
+type Term = Parse' (Token Value)

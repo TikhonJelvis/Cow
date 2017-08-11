@@ -19,7 +19,7 @@ import           Text.Parsec.String
 --                        / \
 --                       3   4
 --
-readTree :: String -> Either ParseError (Parse Int)
+readTree :: String -> Either ParseError (Parse' Int)
 readTree str = parse tree "<interactive>" str
   where tree =  Leaf () <$> leaf
             <|> Node () <$> node
@@ -29,7 +29,7 @@ readTree str = parse tree "<interactive>" str
 
 -- | An unsafe version of readTree where a bad parse results in a
 -- runtime error.
-readTree' :: String -> Parse Int
+readTree' :: String -> Parse' Int
 readTree' str = case readTree str of
   Left err  -> error $ show err
   Right res -> res
