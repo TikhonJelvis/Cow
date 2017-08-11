@@ -68,7 +68,7 @@ charWidth   = 0.25
 
 -- | Calculates the y coordinate of each node in a tree, counting up
 -- from the leaves which are all at y = 0.
-nodeY :: (Floating n, Ord n) => ParseTree annot leaf -> ParseTree (n, annot) leaf
+nodeY :: (Floating n, Ord n) => Parse annot leaf -> Parse (n, annot) leaf
 nodeY (Leaf annot leaf)     = Leaf (0, annot) leaf
 nodeY (Node annot children) = Node (maximum depths + nodeSpacing, annot) children'
   where children' = nodeY <$> children
@@ -78,7 +78,7 @@ nodeY (Node annot children) = Node (maximum depths + nodeSpacing, annot) childre
 -- are all evenly arranged at the bottom of the tree, with each
 -- internal node centered *relative to its leaves* (not necessarily
 -- its direct sub-nodes).
-nodeX :: (Floating n, Ord n) => ParseTree annot String -> ParseTree (n, annot) String
+nodeX :: (Floating n, Ord n) => Parse annot String -> Parse (n, annot) String
 nodeX tree = offsetAndCenter $ nodeWidth tree
   where -- Calculate the x offset of every node in a tree to center
         -- the root node and move the subtrees relative to each other
@@ -103,13 +103,13 @@ nodeX tree = offsetAndCenter $ nodeWidth tree
                 widths    = children' ^.. each . topAnnot . _1
 
 -- | Lays a whole tree out with everything aligned from the leaves up.
-clusterLayoutTree :: (Floating n, Ord n) => ParseTree annot String ->
+clusterLayoutTree :: (Floating n, Ord n) => Parse annot String ->
                                             Rose.Tree ((annot, Maybe String), P2 n)
 clusterLayoutTree = fmap go . toRoseTreeAnnot . (annots %~ toP2) . nodeX . nodeY
   where go ((pos, annot), leaf) = ((annot, leaf), pos)
         toP2 (width, (depth, annot)) = (p2 (width, depth), annot)
 
-exampleTree :: ParseTree () String
+exampleTree :: Parse () String
 exampleTree = show <$> readTree' "[[1][2[3 4]][5[6][7[[8 9 10 11 12]][13 14 15]]]]"
 
 exampleTreeDiagram = renderParseTree exampleTree # translateY 10 # pad 1.1 # bg white

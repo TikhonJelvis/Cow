@@ -2,7 +2,7 @@
 *~
 \#*\#
 
-# Haskell build artefacts
+# Haskell build artifacts
 *.hi
 *.o
 dist

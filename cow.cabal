@@ -1,15 +1,15 @@
 Name:                cow
 Version:             0.3.0.0
 Synopsis:            Semantic version control: language-aware diff and merge.
-Description:         An advanced diff and merge tool that parses code files and then compares the resulting parse trees rather than the actual text of the program. It's pretty cool.
+Description:         An advanced diff and merge tool that parses code files and then compares the resulting parse trees rather than the actual text of the program.
 Homepage:            http://jelv.is/cow
 
 License:             GPL-3
 License-file:        LICENSE
 
 
-Author:              Ankur Dave, Tikhon Jelvis
-Maintainer:          tikhon@jelv.is
+Author:              Ankur Dave, Tikhon Jelvis <tikhon@jelv.is>
+Maintainer:          Tikhon Jelvis <tikhon@jelv.is>
 
 Category:            Development
 
@@ -18,6 +18,9 @@ Build-type:          Simple
 Cabal-version:       >=1.9.2
 
 Library
+  GHC-options:       -rtsopts -O2
+  Hs-source-dirs:    src
+
   Build-depends:     array >= 0.3
                    , base
                    , containers >= 0.4
@@ -28,13 +31,15 @@ Library
                    , mtl >= 2
                    , parsec >= 3
                    , text >= 1.2
-  Hs-source-dirs:    src
+
   Exposed-modules: Cow.Diff
                  , Cow.Examples
+                 , Cow.Language.JavaScript
+                 , Cow.Language.JavaScript.Value
+                 , Cow.Language.Token
                  , Cow.ParseTree
                  , Cow.ParseTree.Read
                  , Cow.ParseTree.Viz
-  GHC-options:       -rtsopts -O2
 
 Executable cow
   Main-is:           src/Cow/Main.hs
