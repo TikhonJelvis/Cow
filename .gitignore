@@ -9,6 +9,7 @@ result
 *.hi
 *.o
 dist
+dist-newstyle
 
 # IPython (IHaskell) notebook stuff
 *.ipynb*
