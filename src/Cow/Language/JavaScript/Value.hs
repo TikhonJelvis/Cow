@@ -4,11 +4,14 @@ module Cow.Language.JavaScript.Value where
 
 import           Control.Lens
 
-import           Data.Text          (Text)
-import qualified Data.Text          as Text
+import           Data.Generics.Labels ()
+import           Data.Text            (Text)
+import qualified Data.Text            as Text
 import           Data.Text.Lens
 
-import           Text.Printf        (printf)
+import           GHC.Generics         (Generic)
+
+import           Text.Printf          (printf)
 
 import           Cow.Language.Token
 import           Cow.ParseTree
@@ -17,11 +20,9 @@ import           Cow.ParseTree
 -- | The name of an identifier or object key, kept abstract to
 -- differentiate from strings. (Not 100% sure about this design
 -- decision.)
-newtype Name = Name { _name :: Text } deriving Eq
+newtype Name = Name { name :: Text } deriving (Eq, Generic)
 
-makeLenses ''Name
-
-instance Show Name where show n = n ^. name . _Text
+instance Show Name where show n = n ^. #name . _Text
 
 -- | The kinds of tokens we ultimately parse.
 --
@@ -132,7 +133,7 @@ instance Show Value where
     ArgSep            -> ","
 
     DeclSep           -> ","
-    
+
     ObjStart          -> "{"
     ObjEnd            -> "}"
     ObjKey (Name key) -> printf "%s :" $ Text.unpack key

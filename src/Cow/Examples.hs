@@ -18,7 +18,6 @@ import           Text.Printf                   (printf)
 import           Cow.Diff
 import qualified Cow.Language.JavaScript       as JS
 import qualified Cow.Language.JavaScript.Value as JS
-import           Cow.Language.Token
 import           Cow.ParseTree
 import           Cow.ParseTree.Read
 import           Cow.ParseTree.Viz
@@ -59,7 +58,7 @@ renderFileDiff pathIn pathOut = do in_  <- readFile pathIn
                                      Left err    → print err >> return undefined
                                      Right trees → return $ render trees
 
-  where render = uncurry (renderDiffTrees $ JS.weigh . _value)
+  where render = uncurry (renderDiffTrees $ JS.weigh . view #value)
 
 -- ** Helper functions
 

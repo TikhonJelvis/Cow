@@ -7,20 +7,22 @@ module Cow.Language.Token where
 
 import           Control.Lens
 
-import           Data.Text    (Text)
+import           Data.Generics.Labels ()
+import           Data.Text            (Text)
+
+import           GHC.Generics         (Generic)
 
 -- | A single token that preserves the whitespace consumed in parsing
 -- it.
 data Token a = Token
-    { _whitespace :: Text
+    { whitespace :: Text
     -- ^ The whitespace *before* this token.
-    , _value      :: a
+    , value      :: a
     -- ^ The semantic role of this token (ie list
-    }
-
-makeLenses ''Token
+    } deriving (Generic)
 
 instance Eq a ⇒ Eq (Token a) where
-  t1 == t2 = t1 ^. value == t2 ^. value
+  t1 == t2 = t1 ^. #value == t2 ^. #value
 
-instance Show a ⇒ Show (Token a) where show = show . _value
+instance Show a ⇒ Show (Token a) where
+  show = show . view #value
