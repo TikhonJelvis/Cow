@@ -6,4 +6,5 @@ import           System.Environment            (getArgs)
 
 import           Text.ParserCombinators.Parsec
 
+main ∷ IO ()
 main = putStrLn "Cow"

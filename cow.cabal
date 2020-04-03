@@ -1,52 +1,103 @@
-Name:                cow
-Version:             0.3.0.0
-Synopsis:            Semantic version control: language-aware diff and merge.
-Description:         An advanced diff and merge tool that parses code files and then compares the resulting parse trees rather than the actual text of the program.
-Homepage:            http://jelv.is/cow
+cabal-version:       2.2
 
-License:             GPL-3
-License-file:        LICENSE
+name:                cow
+version:             0.3.0.0
+synopsis:            Semantic version control: language-aware diff and merge.
+description:         An advanced diff and merge tool that parses code files and then compares the resulting parse trees rather than the actual text of the program.
+homepage:            http://jelv.is/cow
 
+license:             GPL-3.0-or-later
+license-file:        LICENSE
 
-Author:              Ankur Dave, Tikhon Jelvis <tikhon@jelv.is>
-Maintainer:          Tikhon Jelvis <tikhon@jelv.is>
+author:              Tikhon Jelvis <tikhon@jelv.is>, Ankur Dave, Dimitri DeFigueiredo
+maintainer:          Tikhon Jelvis <tikhon@jelv.is>
 
-Category:            Development
+category:            Development
 
-Build-type:          Simple
+build-type:          Simple
 
-Cabal-version:       >=1.9.2
+common shared
+  default-langauge: Haskell2010
 
-Library
-  GHC-options:       -rtsopts -O2
-  Hs-source-dirs:    src
+  ghc-options: -Wall
+               -Wincomplete-uni-patterns
+               -Wincomplete-record-updates
 
-  Build-depends:     array >= 0.3
-                   , base
-                   , containers >= 0.4
-                   , diagrams-contrib >= 1.3
-                   , diagrams-lib >= 1.3
-                   , diagrams-svg >= 1.3
-                   , lens >= 4.13
-                   , mtl >= 2
-                   , parsec >= 3
-                   , text >= 1.2
+               -Wno-name-shadowing
+               -Wno-type-defaults
+               -Wno-unused-do-bind
 
-  Exposed-modules: Cow.Diff
+  default-extensions: AllowAmbiguousTypes
+                      BangPatterns
+                      DeriveFunctor
+                      DeriveGeneric
+                      DuplicateRecordFields
+                      FlexibleContexts
+                      FlexibleInstances
+                      FunctionalDependencies
+                      GADTs
+                      InstanceSigs
+                      LambdaCase
+                      MonadComprehensions
+                      MultiParamTypeClasses
+                      MultiWayIf
+                      NamedFieldPuns
+                      NamedWildCards
+                      OverloadedLabels
+                      OverloadedStrings
+                      ParallelListComp
+                      PartialTypeSignatures
+                      PatternGuards
+                      PatternSynonyms
+                      RecordWildCards
+                      ScopedTypeVariables
+                      StandaloneDeriving
+                      TypeApplications
+                      UndecidableInstances
+                      UnicodeSyntax
+                      ViewPatterns
+
+library
+  import:            shared
+  ghc-options:       -rtsopts -O2
+  hs-source-dirs:    src
+
+  -- TODO: Add version bounds? For now, dependency consistency is
+  -- taken care of with Nix...
+  build-depends:     base
+
+                   , array
+                   , containers
+                   , diagrams-contrib
+                   , diagrams-lib
+                   , diagrams-svg
+                   , generic-lens
+                   , lens
+                   , mtl
+                   , parsec
+                   , text
+
+  exposed-modules: Cow.Diff
                  , Cow.Examples
-                 , Cow.Language.JavaScript
-                 , Cow.Language.JavaScript.Value
-                 , Cow.Language.Token
                  , Cow.ParseTree
                  , Cow.ParseTree.Read
                  , Cow.ParseTree.Viz
 
-Executable cow
-  Main-is:           src/Cow/Main.hs
-  Build-depends:     base
+                 , Cow.Language.JavaScript
+                 , Cow.Language.JavaScript.Value
+                 , Cow.Language.Token
+
+
+executable cow
+  import:            shared
+  main-is:           cow.hs
+  hs-source-dirs:    app
+  build-depends:     base
+
                    , cow
+
                    , diagrams-svg >= 1.3
                    , lens >= 4.13
                    , parsec >= 3
                    , text >= 1.2
-  GHC-options:       -rtsopts -O2
+  ghc-options:       -rtsopts -O2

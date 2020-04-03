@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Cow.Language.JavaScript.Value where
 
@@ -30,12 +30,11 @@ instance Show Name where show n = n ^. name . _Text
 data Value = Variable Name
            | Num Double
            | String Text
-           | Regex Text         -- TODO: better type for regex?
+           | Regex Text
 
            | Label Name
            | LabelStart -- the colon after a label name
 
-             -- TODO: Exauhstive types for operators and keywords?
            | Keyword Text
            | Operator Text
 
@@ -104,38 +103,55 @@ instance Show Value where
     Num n             -> printf "%.2f" n
     String text       -> show $ Text.unpack text
     Regex regex       -> printf "/%s/" $ Text.unpack regex
+
     Label (Name l)    -> printf "%s:" $ Text.unpack l
     LabelStart        -> ":"
+
     Keyword word      -> printf "<%s>" $ Text.unpack word
     Operator op       -> Text.unpack op
+
     Semicolon         -> ";"
     LineEnd           -> "<;>"
+
     ParenStart        -> "("
     ParenEnd          -> ")"
+
     ArrayStart        -> "["
     ArrayEnd          -> "]"
     ArraySep          -> ","
+
     IndexStart        -> "["
     IndexEnd          -> "]"
+
     CallStart         -> "("
     CallEnd           -> ")"
     CallSep           -> ","
+
     ArgStart          -> "("
     ArgEnd            -> ")"
     ArgSep            -> ","
+
+    DeclSep           -> ","
+    
     ObjStart          -> "{"
     ObjEnd            -> "}"
     ObjKey (Name key) -> printf "%s :" $ Text.unpack key
     ObjSep            -> ","
     ObjColon          -> ":"
+
     CondStart         -> "("
     CondEnd           -> ")"
+
     ForSep            -> ";"
+
     CaseColon         -> ":"
+
     CatchStart        -> "("
     CatchEnd          -> ")"
+
     BlockStart        -> "{"
     BlockEnd          -> "}"
+
     LineComment text  -> printf "//%s" $ Text.unpack text
     BlockComment text -> printf "/*%s*/" $ Text.unpack text
 
@@ -145,7 +161,7 @@ instance Show Value where
 -- operators and finally punctuation at a low weight of '0.25'. The
 -- numbers are arbitrary, but the idea is to *roughly* capture what is
 -- and isn't important to the meaning of a program.
-weigh :: Value -> Double
+weigh ∷ Value → Double
 weigh value | important value = 1
             | medium value    = 0.5
             | otherwise       = 0.2

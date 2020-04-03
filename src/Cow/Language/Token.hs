@@ -7,26 +7,20 @@ module Cow.Language.Token where
 
 import           Control.Lens
 
-import           Data.Text     (Text)
-
-import           Cow.ParseTree
-
+import           Data.Text    (Text)
 
 -- | A single token that preserves the whitespace consumed in parsing
 -- it.
 data Token a = Token
-  { _whitespace :: Text
+    { _whitespace :: Text
     -- ^ The whitespace *before* this token.
-  , _value      :: a
+    , _value      :: a
     -- ^ The semantic role of this token (ie list
-    -- separator, object key) with any relevant content
-    -- (ie the identifier itself).
-  }
+    }
 
 makeLenses ''Token
 
-instance Eq a => Eq (Token a) where
+instance Eq a ⇒ Eq (Token a) where
   t1 == t2 = t1 ^. value == t2 ^. value
 
-instance Show a => Show (Token a) where show = show . _value
-
+instance Show a ⇒ Show (Token a) where show = show . _value
