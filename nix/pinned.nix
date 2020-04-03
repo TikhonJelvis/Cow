@@ -2,6 +2,7 @@
 #  * Nixpkgs pinned to nixpkgs-unstable on 2020-04-03
 #  * all-cabal-hashes pinned to latest version on 2020-04-03
 
+{}:
 import ./nixpkgs.nix {
   nixpkgs-revision = {
     rev = "05f0934825c2a0750d4888c4735f9420c906b388";
