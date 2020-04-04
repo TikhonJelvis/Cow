@@ -11,8 +11,6 @@ import           Data.Text.Lens
 
 import           GHC.Generics         (Generic)
 
-import           Text.Printf          (printf)
-
 import           Cow.Language.Token
 import           Cow.ParseTree
 
@@ -94,25 +92,25 @@ data Value = Variable Name
              -- comments
            | LineComment Text   -- // ..
            | BlockComment Text  -- /* .. */
-           deriving (Eq)
+           deriving (Show, Eq)
 
 makePrisms ''Value
 
-instance Show Value where
-  show = \case
-    Variable (Name n) -> Text.unpack n
-    Num n             -> printf "%.2f" n
-    String text       -> show $ Text.unpack text
-    Regex regex       -> printf "/%s/" $ Text.unpack regex
+instance ToText Value where
+  toText = \case
+    Variable (Name n) -> n
+    Num n             -> Text.pack $ show n
+    String text       -> Text.pack $ show text
+    Regex regex       -> "/" <> regex <> "/"
 
-    Label (Name l)    -> printf "%s:" $ Text.unpack l
+    Label (Name l)    -> l <> ":"
     LabelStart        -> ":"
 
-    Keyword word      -> printf "<%s>" $ Text.unpack word
-    Operator op       -> Text.unpack op
+    Keyword word      -> word
+    Operator op       -> op
 
     Semicolon         -> ";"
-    LineEnd           -> "<;>"
+    LineEnd           -> "\n"
 
     ParenStart        -> "("
     ParenEnd          -> ")"
@@ -136,7 +134,7 @@ instance Show Value where
 
     ObjStart          -> "{"
     ObjEnd            -> "}"
-    ObjKey (Name key) -> printf "%s :" $ Text.unpack key
+    ObjKey (Name key) -> Text.pack $ show key
     ObjSep            -> ","
     ObjColon          -> ":"
 
@@ -153,8 +151,8 @@ instance Show Value where
     BlockStart        -> "{"
     BlockEnd          -> "}"
 
-    LineComment text  -> printf "//%s" $ Text.unpack text
-    BlockComment text -> printf "/*%s*/" $ Text.unpack text
+    LineComment text  -> "//" <> text
+    BlockComment text -> "/*" <> text <> "*/"
 
 -- | Assigns a weight to each token based on how important it
 -- is. Tokens that carry a lot of user-specific information are the

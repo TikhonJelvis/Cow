@@ -13,7 +13,7 @@ import           Control.Lens
 -- | A parse tree that carries the parsed tokens in its leaves, along
 -- with arbitrary annotations at each node.
 data Parse annot leaf = Node annot (NonEmpty (Parse annot leaf))
-    | Leaf annot leaf
+                      | Leaf annot leaf
     deriving (Show, Eq, Functor)
 
 -- | A parse tree where we don't care about the annotations at each

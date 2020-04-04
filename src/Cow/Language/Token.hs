@@ -12,13 +12,12 @@ import           Data.Text            (Text)
 
 import           GHC.Generics         (Generic)
 
--- | A single token that preserves the whitespace consumed in parsing
--- it.
+-- | A single token along with the whitespace that *followed* it.
 data Token a = Token
     { whitespace :: Text
-    -- ^ The whitespace *before* this token.
+    -- ^ The whitespace *after* this token.
     , value      :: a
-    -- ^ The semantic role of this token (ie list
+    -- ^ A value representing the token itself.
     } deriving (Generic)
 
 instance Eq a ⇒ Eq (Token a) where
@@ -26,3 +25,12 @@ instance Eq a ⇒ Eq (Token a) where
 
 instance Show a ⇒ Show (Token a) where
   show = show . view #value
+
+-- | A class of values that can be converted directly to text. The
+-- idea is that each language-specific token type can be rendered back
+-- to text.
+class ToText a where
+  toText :: a -> Text
+
+instance ToText a => ToText (Token a) where
+  toText Token {..} = toText value <> whitespace
