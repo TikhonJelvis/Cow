@@ -1,9 +1,10 @@
+{-# LANGUAGE ApplicativeDo   #-}
 {-# LANGUAGE OverloadedLists #-}
--- | A basic JavaScript parser that produces a ParseTree with Token
--- values as leaves. The Token values keep track of whitespace
--- consumed during lexing which can be accessed to accurately print
--- the parsed input but does not factor into equality comparisons or
--- other operations.
+-- | A basic JavaScript parser that produces a 'ParseTree' with
+-- 'Token' values as leaves. The 'Token' values keep track of
+-- whitespace consumed during lexing which can be accessed to
+-- accurately print the parsed input but does not factor into equality
+-- comparisons or other operations.
 --
 -- The parser has not been deeply tested so do not expect 100%
 -- conformance to actual JavaScript syntax.
@@ -33,28 +34,26 @@ import           Cow.ParseTree
 
 -- ** Parsing helpers:
 
--- | Whitespace characters that are skippable—@space@ but without
--- newlines which need to be tracked to support JavaScript arcane
--- semicolon rules.
-skippable ∷ Parser Char
-skippable = satisfy $ \ x -> Char.isSpace x && x /= '\n'
-
-                             -- TODO: Should this consume the final
-                             -- newline as well?
--- | Line comments like '// this is a comment'.
+-- | Line comments.
+-- @
+-- // this is a comment
+-- @
 lineComment ∷ Parser Value
-lineComment = do literal "//"
-                 contents <- many $ noneOf "\n"
-                 return $ LineComment $ Text.pack contents
+lineComment = do
+  literal "//"
+  contents <- many $ noneOf "\n"
+  pure $ LineComment $ Text.pack contents
 
 -- | Block comments that can span multiple lines (like '/* comment
 -- */').
 --
 -- Note that block comments *do not nest* in JavaScript!
 blockComment ∷ Parser Value
-blockComment = do contents <- between (literal "/*") (literal "*/") anything
-                  return $ BlockComment $ Text.pack contents
-  where anything = many $ noneOf "*" <|> (try $ char '*' <* notFollowedBy (char '/'))
+blockComment = do
+  contents <- between (literal "/*") (literal "*/") anything
+  pure $ BlockComment $ Text.pack contents
+  where anything = many $  noneOf "*"
+                       <|> (try $ char '*' <* notFollowedBy (char '/'))
 
 -- | Either kind of comment.
 comment ∷ Parser Value
@@ -64,36 +63,43 @@ comment = try lineComment <|> blockComment
 -- that consumes and saves the whitespace *after* the token, as well
 -- as handling comments.
 tokenize ∷ Parser Value → Parser Term
-tokenize value = do val     <- value
-                    spaces  <- Text.pack <$> many skippable
-                    let token = Leaf' $ Token spaces val
-                    optionMaybe (try $ tokenize comment) <&> \case
-                      Just comment -> Node' [token, comment]
-                      Nothing      -> token
+tokenize value = do
+  val     <- value
+  spaces  <- Text.pack <$> many spaceChar
+
+  let token = Leaf' $ Token spaces val
+
+  optionMaybe (try $ tokenize comment) <&> \case
+    Just comment -> Node' [token, comment]
+    Nothing      -> token
+  where spaceChar = satisfy $ \ x -> Char.isSpace x && x /= '\n'
 
 -- | Tokenizes a parser to *also* consume newlines—used for tokens
 -- that prevent automatic semicolon insertion (ASI).
 noASI ∷ Parser Value → Parser Term
-noASI value = do val    <- value
-                 spaces <- Text.pack <$> many space
-                 let token = Leaf' $ Token spaces val
-                 optionMaybe (try $ noASI comment) <&> \case
-                   Just comment -> Node' [token, comment]
-                   Nothing      -> token
+noASI value = do
+  val    <- value
+  spaces <- Text.pack <$> many space
+  let token = Leaf' $ Token spaces val
+  optionMaybe (try $ noASI comment) <&> \case
+    Just comment -> Node' [token, comment]
+    Nothing      -> token
 
 -- | Parses delimited lists like '1,2,3,4,' tokenizing all the pieces
 -- (both values *and* delimiters).
 --
 -- Allows an optional trailing delimiter, as long as there is at least
 -- one expression. (So just ',' won't parse!)
-tokenizedList ∷ Parser Term -- ^ The separator (usually a comma).
-              → Parser Term -- ^ The expression between separators.
+tokenizedList ∷ Parser Term
+              -- ^ The separator (usually a comma).
+              → Parser Term
+              -- ^ The expression between separators.
               → Parser [Term]
-tokenizedList sep exp = do entries <- join <$> many (try entry)
-                           final   <- optionMaybe exp
-                           return $ entries <> maybeToList final
-  where -- a single 'exp' followed by a separator
-        entry = (\ a b -> [a, b]) <$> exp <*> sep
+tokenizedList sep exp = do
+  entries <- join <$> many (try entry)
+  final   <- optionMaybe exp
+  pure $ entries <> maybeToList final
+  where entry = [[a, b] | a <- exp, b <- sep]
 
 -- | A character that makes up a valid JavaScript identifier.
 --
@@ -105,9 +111,9 @@ idChar = alphaNum <|> oneOf "$_"
 -- | Parses a keyword, based on @reserved@ from @Text.Parse.Token@.
 keyword ∷ Text → Parser Term
 keyword keyword = tokenize $ Keyword keyword <$ parseKeyword
-  where parseKeyword =
-          do literal keyword
-             notFollowedBy idChar <?> ("end of " <> Text.unpack keyword)
+  where parseKeyword = do
+          literal keyword
+          notFollowedBy idChar <?> ("end of " <> Text.unpack keyword)
 
 -- | Parses a valid name which can start with a letter/$/_ followed by
 -- any number of letters/numbers/$/_.
@@ -129,11 +135,12 @@ punct value mark = noASI $ value <$ literal mark
 -- | Parses a condition (the '(..)' in 'if (..)', 'while (..)',
 -- 'switch (..)' and so on).
 condition ∷ Parser Term → Parser Term
-condition contents = do open  <- punct CondStart "("
-                        stuff <- contents
-                        close <- punct CondEnd ")"
-                        return $ Node' [open, stuff, close]
-
+condition contents = do
+  open <- punct CondStart "("
+  stuff <- contents
+  close <- punct CondEnd ")"
+  pure $ Node' [open, stuff, close]
+  
 -- ** Language Productions
 
 -- | The end of a line of code: a semicolon or a newline.
@@ -181,12 +188,13 @@ label = tokenize $ Label <$> identifier
 -- and Unicode (both '\uXXXX' and '\u{XXXXXX}' formats).
 stringLiteral ∷ Parser Term
 stringLiteral = tokenize $ String <$> contents
-  where contents = do start    <- oneOf "'\""
-                      contents <- many $ strChar start
+  where contents = do
+          start    <- oneOf "'\""
+          contents <- many $ strChar start
 
-                      char start <?> "end of string"
+          char start <?> "end of string"
 
-                      return $ Text.pack contents
+          pure $ Text.pack contents
 
         strChar start = satisfy notSpecial
                      <|> escape <?> "string character"
@@ -216,10 +224,12 @@ stringLiteral = tokenize $ String <$> contents
 number ∷ Parser Term
 number = tokenize $ Num <$> (try intLit <|> floatLit)
   where -- an integer literal *not* in decimal (ie 0x10 but not 10)
-        intLit = do sign   <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
-                    format <- parseFormat
-                    num    <- many1 digit
-                    return . sign . toFormat format $ num
+        intLit = do
+          sign   <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
+          format <- parseFormat
+          num    <- many1 digit
+          pure $ sign $ toFormat format $ num
+
         parseFormat = choice $ try . string <$> ["0x", "0X", "0b", "0B", "0"]
         toFormat format = fromMaybe read $ toReader <$> lookup format formats
         toReader f = fst . head . f
@@ -229,79 +239,92 @@ number = tokenize $ Num <$> (try intLit <|> floatLit)
           where isBinary x = x == '0' || x == '1'
 
         -- a float literal: 105, 10.5, 10e5, 10.1e5… etc
-        floatLit = do sign <- (negate <$ try (char '-') <|> id <$ optional (char '+'))
-                      num  <- try $ many1 digit
-                      dec  <- optionMaybe $ char '.' *> many1 digit
-                      exp  <- optionMaybe $ oneOf "eE" *> many1 digit
-                      let dec' = fromMaybe "" $ ("." <>) <$> dec
-                          exp' = fromMaybe "" $ ("e" <>) <$> exp
-                      return . sign . read $ num <> dec' <> exp'
+        floatLit = do
+          sign <- (negate <$ try (char '-')
+              <|> id <$ optional (char '+'))
+
+          num  <- try $ many1 digit
+          dec  <- optionMaybe $ char '.' *> many1 digit
+          exp  <- optionMaybe $ oneOf "eE" *> many1 digit
+
+          let dec' = fromMaybe "" $ ("." <>) <$> dec
+              exp' = fromMaybe "" $ ("e" <>) <$> exp
+
+          pure $ sign $ read $ num <> dec' <> exp'
 
 -- | The index part of an expression indexing into an array: ie the
 -- '[f(x)]' from 'g(y)[f(x)]'.
 indexExpression ∷ Parser Term
-indexExpression = do open  <- punct IndexStart "["
-                     index <- expression
-                     close <- punct IndexEnd "]"
-                     return $ Node' [open, index, close]
+indexExpression = do
+  open  <- punct IndexStart "["
+  index <- expression
+  close <- punct IndexEnd "]"
+  pure $ Node' [open, index, close]
 
 -- | The arguments of a function call expression: ie the '(1,2,3)' of
 -- 'f(1,2,3)'.
 callExpression ∷ Parser Term
-callExpression = do open  <- punct CallStart "("
-                    args  <- tokenizedList (punct CallSep ",") expression
-                    close <- punct CallEnd ")"
-                    return . Node' $ open :| (args <> [close])
+callExpression = do
+  open  <- punct CallStart "("
+  args  <- tokenizedList (punct CallSep ",") expression
+  close <- punct CallEnd ")"
+  pure $ Node' $ open :| (args <> [close])
 
 -- | An expression with a mix of function calls and array indexing
 -- like 'f(1)[2](3)'.
 --
 -- Separated out to deal with left-recursion.
 callsAndIndices ∷ Parser Term
-callsAndIndices = do base  <- simpleAtom
-                     calls <- many1 (callExpression <|> indexExpression)
-                     return . Node' $ base :| calls
+callsAndIndices = do
+  base  <- simpleAtom
+  calls <- many1 (callExpression <|> indexExpression)
+  pure $ Node' $ base :| calls
 
 -- | Parses array literals like '[1,f(x), g(x)[3] + z]'.
 arrayLiteral ∷ Parser Term
-arrayLiteral = do open  <- punct ArrayStart "["
-                  items <- tokenizedList (punct ArraySep ",") expression
-                  close <- punct ArrayEnd "]"
-                  return . Node' $ open :| (items <> [close])
+arrayLiteral = do
+  open  <- punct ArrayStart "["
+  items <- tokenizedList (punct ArraySep ",") expression
+  close <- punct ArrayEnd "]"
+  pure $ Node' $ open :| (items <> [close])
 
 -- | Parses JavaScript object literals like '{a : 10, b : 11}'.
 objectLiteral ∷ Parser Term
-objectLiteral = do open  <- punct ObjStart "{"
-                   pairs <- tokenizedList (punct ObjSep ",") pair
-                   close <- punct ObjEnd "}"
-                   return . Node' $ open :| (pairs <> [close])
+objectLiteral = do
+  open  <- punct ObjStart "{"
+  pairs <- tokenizedList (punct ObjSep ",") pair
+  close <- punct ObjEnd "}"
+  pure $ Node' $ open :| (pairs <> [close])
   where -- a key value pair in an object, like 'a : 10'
-        pair = do field <- try stringLiteral <|> variable
-                  sep   <- punct ObjColon ":"
-                  val   <- expression
-                  return $ Node' [field, sep, val]
+        pair = do
+          field <- try stringLiteral <|> variable
+          sep   <- punct ObjColon ":"
+          val   <- expression
+          pure $ Node' [field, sep, val]
 
 -- | A block is a series of statements surrounded by '{' and '}'. The
 -- braces are not optional! (The optional case for conditionals and
 -- loops is handled separately.)
 block ∷ Parser Term
-block = do open  <- punct BlockStart "{"
-           body  <- many statement
-           close <- punct BlockEnd "}"
-           return . Node' $ open :| (body <> [close])
+block = do
+  open  <- punct BlockStart "{"
+  body  <- many statement
+  close <- punct BlockEnd "}"
+  pure $ Node' $ open :| (body <> [close])
 
 -- | A function expression. The function can *optionally* have a name:
 -- this covers both 'function () {}' and 'function foo() {}'.
 functionLiteral ∷ Parser Term
-functionLiteral = do func  <- keyword "function"
-                     name  <- optionMaybe variable
-                     open  <- punct ArgStart "("
-                     args  <- tokenizedList (punct ArgSep ",") variable
-                     close <- punct ArgEnd ")"
-                     body  <- block
+functionLiteral = do
+  func  <- keyword "function"
+  name  <- optionMaybe variable
+  open  <- punct ArgStart "("
+  args  <- tokenizedList (punct ArgSep ",") variable
+  close <- punct ArgEnd ")"
+  body  <- block
 
-                     let argList = Node' $ open :| (args <> [close])
-                     return $ Node' $ func :| (maybeToList name <> [argList, body])
+  let argList = Node' $ open :| (args <> [close])
+  pure $ Node' $ func :| (maybeToList name <> [argList, body])
 
 -- | A self-contained piece of a JavaScript expression.
 --
@@ -314,10 +337,11 @@ simpleAtom =  stringLiteral
           <|> try number
           <|> try variable
           <|> parens
-  where parens = do open  <- punct ParenStart "("
-                    exp   <- expression
-                    close <- punct ParenEnd ")"
-                    return $ Node' [open, exp, close]
+  where parens = do
+          open  <- punct ParenStart "("
+          exp   <- expression
+          close <- punct ParenEnd ")"
+          pure $ Node' [open, exp, close]
 
 -- | Any JavaScript expression without any operators.
 atom ∷ Parser Term
@@ -346,12 +370,13 @@ expression' = Expr.buildExpressionParser table atom <?> "expression"
 
 -- | Parses the ternary operator ('a ? b : c').
 ternary ∷ Parser Term
-ternary = do cond  <- expression'
-             start <- noASI $ Operator <$> literal "?"
-             then_ <- expression
-             end   <- noASI $ Operator <$> literal ":"
-             else_ <- expression
-             return $ Node' [cond, start, then_, end, else_]
+ternary = do
+  cond  <- expression'
+  start <- noASI $ Operator <$> literal "?"
+  then_ <- expression
+  end   <- noASI $ Operator <$> literal ":"
+  else_ <- expression
+  pure $ Node' [cond, start, then_, end, else_]
 
 -- | Any JavaScript expression.
 expression ∷ Parser Term
@@ -360,27 +385,31 @@ expression = try ternary <|> expression'
 -- | Declaring a variable with 'var', 'let' or 'const'. Currently does
 -- not support destructuring assignment.
 declaration ∷ Parser Term
-declaration = do start <- keyword "var" <|> keyword "let" <|> keyword "const"
-                 defs  <- tokenizedList (punct DeclSep ",") varDef
-                 return $ Node' $ start :| defs
-  where varDef  = do name <- variable
-                     val  <- optionMaybe setting
-                     return $ Node' $ name :| maybeToList val
-        setting = do op  <- tokenize $ Operator <$> literal "="
-                     val <- expression
-                     return $ Node' [op, val]
-
+declaration = do
+  start <- keyword "var" <|> keyword "let" <|> keyword "const"
+  defs  <- tokenizedList (punct DeclSep ",") varDef
+  pure $ Node' $ start :| defs
+  where varDef  = do
+          name <- variable
+          val  <- optionMaybe setting
+          pure $ Node' $ name :| maybeToList val
+        setting = do
+          op  <- tokenize $ Operator <$> literal "="
+          val <- expression
+          pure $ Node' [op, val]
 
 -- | An 'if' statement with an optional 'else' clause afterwards.
 ifElse ∷ Parser Term
-ifElse = do if'   <- keyword "if"
-            cond  <- condition expression
-            body  <- statement
-            else' <- maybeToList <$> optionMaybe elseClause
-            return . Node' $ if' :| [cond, body] <> else'
-  where elseClause = do else' <- keyword "else"
-                        body  <- statement
-                        return $ Node' [else', body]
+ifElse = do
+  if'   <- keyword "if"
+  cond  <- condition expression
+  body  <- statement
+  else' <- maybeToList <$> optionMaybe elseClause
+  pure $ Node' $ if' :| [cond, body] <> else'
+  where elseClause = do
+          else' <- keyword "else"
+          body  <- statement
+          pure $ Node' [else', body]
 
 -- | A 'try { ... }' statement with any number of 'catch' clauses and
 -- an optional 'finally' clause.
@@ -388,98 +417,113 @@ ifElse = do if'   <- keyword "if"
 -- This will parse if there are no 'catch' *or* 'finally' clauses even
 -- though that isn't strictly valid JavaScript.
 tryCatch ∷ Parser Term
-tryCatch = do try     <- keyword "try"
-              body    <- block
-              catches <- many catch
-              finally <- maybeToList <$> optionMaybe finally
-              return . Node' $ try :| [body] <> catches <> finally
-  where catch = do start <- keyword "catch"
-                   open  <- punct CatchStart "("
-                   eName <- variable
-                   close <- punct CatchEnd ")"
-                   body  <- block
-                   return $ Node' [start, open, eName, close, body]
-        finally = do start <- keyword "finally"
-                     body  <- block
-                     return $ Node' [start, body]
+tryCatch = do
+  try     <- keyword "try"
+  body    <- block
+  catches <- many catch
+  finally <- maybeToList <$> optionMaybe finally
+  pure $ Node' $ try :| [body] <> catches <> finally
+  where catch = do
+          start <- keyword "catch"
+          open  <- punct CatchStart "("
+          eName <- variable
+          close <- punct CatchEnd ")"
+          body  <- block
+          pure $ Node' [start, open, eName, close, body]
+        finally = do
+          start <- keyword "finally"
+          body  <- block
+          pure $ Node' [start, body]
 
 -- | Parses a switch statement ('switch (foo) { case 'a': ... default: ... }').
 switch ∷ Parser Term
-switch = do start <- keyword "switch"
-            cond  <- condition expression
-            body  <- caseBlock
-            return $ Node' [start, cond, body]
-  where caseBlock = do open  <- punct BlockStart "{"
-                       body  <- many (case_ <|> default_)
-                       close <- punct BlockEnd "}"
-                       return . Node' $ open :| body <> [close]
-        case_ = do start <- keyword "case"
-                   val   <- expression
-                   end   <- punct CaseColon ":"
-                   body  <- many (try statement)
-                   return . Node' $ start :| [val, end] <> body
-        default_ = do start <- keyword "default"
-                      end   <- punct CaseColon  ":"
-                      body  <- many statement
-                      return . Node' $ start :| [end] <> body
+switch = do
+  start <- keyword "switch"
+  cond  <- condition expression
+  body  <- caseBlock
+  pure $ Node' [start, cond, body]
+  where caseBlock = do
+          open  <- punct BlockStart "{"
+          body  <- many (case_ <|> default_)
+          close <- punct BlockEnd "}"
+          pure $ Node' $ open :| body <> [close]
+        case_ = do
+          start <- keyword "case"
+          val   <- expression
+          end   <- punct CaseColon ":"
+          body  <- many (try statement)
+          pure $ Node' $ start :| [val, end] <> body
+        default_ = do
+          start <- keyword "default"
+          end   <- punct CaseColon  ":"
+          body  <- many statement
+          pure $ Node' $ start :| [end] <> body
 
 -- | Simple 'while' loops.
 while ∷ Parser Term
-while = do start <- keyword "while"
-           cond  <- condition expression
-           body  <- statement
-           return $ Node' [start, cond, body]
+while = do
+  start <- keyword "while"
+  cond  <- condition expression
+  body  <- statement
+  pure $ Node' [start, cond, body]
 
 -- | do-while loops. Do people even use these any more?
 doWhile ∷ Parser Term
-doWhile = do start <- keyword "do"
-             body  <- block
-             while <- keyword "while"
-             cond  <- condition expression
-             return $ Node' [start, body, while, cond]
+doWhile = do
+  start <- keyword "do"
+  body  <- block
+  while <- keyword "while"
+  cond  <- condition expression
+  pure $ Node' [start, body, while, cond]
 
 -- | For loops of the form 'for (;;)'.
 for ∷ Parser Term
-for = do start <- keyword "for"
-         cond  <- condition forCondition
-         body  <- statement
-         return $ Node' [start, cond, body]
-  where forCondition = do init <- expression <|> declaration
-                          sep1 <- punct ForSep ";"
-                          cond <- expression
-                          sep2 <- punct ForSep ";"
-                          end  <- expression
-                          return $ Node' [init, sep1, cond, sep2, end]
+for = do
+  start <- keyword "for"
+  cond  <- condition forCondition
+  body  <- statement
+  pure $ Node' [start, cond, body]
+  where forCondition = do
+          init <- expression <|> declaration
+          sep1 <- punct ForSep ";"
+          cond <- expression
+          sep2 <- punct ForSep ";"
+          end  <- expression
+          pure $ Node' [init, sep1, cond, sep2, end]
 
 -- | A 'for (x in ls)' or 'for (x of ls)' loop.
 for' ∷ Text → Parser Term
-for' sep = do start <- keyword "for"
-              cond  <- condition for'Condition
-              body  <- statement
-              return $ Node' [start, cond, body]
-  where for'Condition = do var  <- optionMaybe $ keyword "var"
-                           name <- variable
-                           in_  <- keyword sep
-                           ls   <- expression
-                           let var' = maybeToList var
-                           return $ Node' $ NonEmpty.fromList $ var' <> [name, in_, ls]
+for' sep = do
+  start <- keyword "for"
+  cond  <- condition for'Condition
+  body  <- statement
+  pure $ Node' [start, cond, body]
+  where for'Condition = do
+          var  <- optionMaybe $ keyword "var"
+          name <- variable
+          in_  <- keyword sep
+          ls   <- expression
+          let var' = maybeToList var
+          pure $ Node' $ NonEmpty.fromList $ var' <> [name, in_, ls]
 
 -- | A 'with' statement which you probably *shouldn't* use any
 -- more—but I'm sure people do.
 with ∷ Parser Term
-with = do start <- keyword "with"
-          cond  <- condition expression
-          body  <- statement
-          return $ Node' [start, cond, body]
+with = do
+  start <- keyword "with"
+  cond  <- condition expression
+  body  <- statement
+  pure $ Node' [start, cond, body]
 
 -- | A JavaScript statement, including its terminator (ie explicit or
 -- implicit semicolon).
 statement ∷ Parser Term
-statement = do contents <- statement'
-               -- terminator is optional to handle end of block (ie '{
-               -- 1 + 2 }' on one line)
-               end      <- optionMaybe terminator
-               return . Node' $ contents :| maybeToList end
+statement = do
+  contents <- statement'
+  -- terminator is optional to handle end of block (ie '{
+  -- 1 + 2 }' on one line)
+  end      <- optionMaybe terminator
+  pure $ Node' $ contents :| maybeToList end
  where statement' =  try block
                  <|> try expression
                  <|> try declaration
@@ -499,12 +543,14 @@ statement = do contents <- statement'
                  <|> try (for' "of")
                  <|> try with
                  <|> tokenize comment
-       keyworded word val = try $ do start <- keyword word
-                                     end   <- optionMaybe val
-                                     return . Node' $ start :| maybeToList end
-       labelDecl = do l <- label
-                      c <- punct LabelStart ":"
-                      return $ Node' [l, c]
+       keyworded word val = try $ do
+         start <- keyword word
+         end   <- optionMaybe val
+         pure $ Node' $ start :| maybeToList end
+       labelDecl = do
+         l <- label
+         c <- punct LabelStart ":"
+         pure $ Node' [l, c]
 
 -- | Parses a whole JavaScript program.
 program ∷ Parser Term
