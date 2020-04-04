@@ -117,6 +117,8 @@ type DistTable = Array (Int, Int) Dist
 
 -- | Produce the dynamic programming array for comparing two parse
 -- trees using our modified string edit distance algorithm.
+--
+-- See 'diff' for details about how the algorithm works.
 distTable ∷ Eq a ⇒ (Parse' a → Parse Weight a) → Parse' a → Parse' a → DistTable
 distTable weigh input output = ds
   where endIn  = Tree.size input
@@ -198,7 +200,25 @@ distTable weigh input output = ds
                     ]
                 outputWeight = (tableOut ^. #weights) ! o
 
--- | Calculate the distance between two trees using our metric.
+-- | Calculate the distance between two parse trees, along with a lazy
+-- edit script for going from one to the other.
+--
+-- This is a variation of the Wagner-Fischer algorithm adapted to work
+-- on parse trees. When comparing leaves (ie tokens) directly, it
+-- works the same way as the standard algorithm. But when we compare
+-- internal nodes, we have extra options to consider: we can *either*
+-- add/remove the entire subtree that corresponds to a node *or* we
+-- can leave the node in place and move *inside* the node, considering
+-- the nodes and leaves under it separately.
+--
+-- Apart from being able to remove subtrees—and the extra indexing
+-- that comes with that—this algorithm works exactly the same as
+-- Wagner-Fischer, which means it requires O(n²) time and space (which
+-- probably isn't ideal).
+--
+-- For a detailed walkthrough of both the Wagner-Fischer algorithm and
+-- the Haskell technique I'm using to implement dynamic programming
+-- here, take a look at http://jelv.is/blog/Lazy-Dynamic-Programming.
 diff ∷ Eq a ⇒ Weigh a → Parse' a → Parse' a → Dist
 diff weigh left right = distTable weigh left right ! (0, 0)
 
