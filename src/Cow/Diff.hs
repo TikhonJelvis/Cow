@@ -23,28 +23,46 @@ type Weigh leaf = Parse' leaf → Parse Weight leaf
   -- TODO: Figure out how this function behaves and whether it
   -- actually makes any sense!
 -- | Calculate the weight of a tree exponentially discounting each
--- additional level.
-expDiscount ∷ (leaf → Weight) → Weight → Weigh leaf
+-- additional level by a factor of @α@.
+expDiscount ∷ (leaf → Weight)
+            -- ^ A function that assigns weights to tokens at the
+            -- leaves of the tree.
+            → Weight
+            -- ^ α, the factor by which to discount each level. This
+            -- is nested, so we discount by 1 then α then α²… etc.
+            → Weigh leaf
 expDiscount ℓ _ (Leaf _ leaf)     = Leaf (ℓ leaf) leaf
 expDiscount ℓ α (Node _ children) = Node (1 + α * sumOf (each . Tree.annots) result) result
   where result = expDiscount ℓ α <$> children
 
           -- TODO: Clarify and verify!
--- | The weight of a node is n% of its possible range.
+-- | The weight of a node is α% of its possible range.
 --
--- The minimum weight of a node is the largest(?) weight of any one
--- child (otherwise we do not get a valid distance metric). The
--- maximum for the heuristic to be useful is the sum of all its
--- children.
+-- The minimum weight of a node is the largest weight of any one child
+-- (otherwise we do not get a valid distance metric). The maximum for
+-- the heuristic to be useful is the sum of all its children
+-- (otherwise there would be cases where we would remove the elements
+-- of a subtree individually rather than removing the whole subtree in
+-- a single action).
 --
--- This heuristic is equal to minimum + n * (maximum - minimum).
+-- This heuristic is equal to @minimum + α * (maximum - minimum)@,
+-- where:
 --
--- Leaves have weight 1 by fiat.
-percentage ∷ (leaf → Weight) → Weight → Weigh leaf
+--  * @minimum@ is the *largest* weight of a single child
+--  * @maximum@ is the *sum* of the weights of all the children
+percentage ∷ (leaf → Weight)
+           -- ^ A function that assigns weights to tokens at the
+           -- leaves of the tree.
+           → Weight
+           -- ^ The factor by which we discount the *range* of the
+           -- tree, where the range is difference between the minimum
+           -- is the *largest* weight of a single child and the
+           -- maximum is the sum of the weights of all the children.
+           → Weigh leaf
 percentage ℓ _ (Leaf _ leaf)     = Leaf (ℓ leaf) leaf
 percentage ℓ α (Node _ children) = Node (minWeight + α * weightDifference) children'
   where -- minimum is safe here because children' is NonEmpty
-        minWeight = minimum $ children' ^.. each . Tree.topAnnot
+        minWeight = maximum $ children' ^.. each . Tree.topAnnot
         maxWeight = sumOf (each . Tree.topAnnot) children'
 
         weightDifference = maxWeight - minWeight
